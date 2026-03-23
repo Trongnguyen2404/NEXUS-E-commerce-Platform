@@ -1,0 +1,37 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  background-color: #ffffff;
+  color: #111827;
+}
+
+/* Tùy chỉnh thông báo (Toast) cho sang trọng */
+/* Premium Dark Toast */
+.Toastify__toast {
+  border-radius: 12px !important;
+  padding: 16px 20px !important;
+  box-shadow: 0 20px 40px -10px rgba(0,0,0,0.3) !important;
+  font-family: 'Inter', sans-serif !important;
+  border: 1px solid #374151 !important; /* Viền xám tối */
+  background-color: #111827 !important; /* Nền đen nhám */
+  min-height: auto !important;
+}
+
+.Toastify__toast-body {
+  padding: 0 !important;
+  margin: 0 !important;
+  font-size: 0.875rem !important;
+  font-weight: 500 !important;
+  color: #F9FAFB !important; /* Chữ màu trắng sáng */
+  line-height: 1.5 !important;
+}
+
+.Toastify__toast-icon {
+  width: 22px !important;
+  height: 22px !important;
+  margin-inline-end: 12px !important;
+}
