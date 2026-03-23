@@ -1,4 +1,3 @@
-````markdown
 # 🚀 NEXUS - Premium E-commerce Platform
 
 [![Demo Video](https://img.shields.io/badge/YouTube-Watch%20Demo-FF0000?style=for-the-badge&logo=youtube&logoColor=white)](https://youtu.be/J4CwT2gmTT8)
@@ -62,64 +61,5 @@ Click the image below to watch the full system demonstration on YouTube:
 
 ### 1. Clone the repository
 ```bash
-git clone [https://github.com/Trongnguyen2404/NEXUS-E-commerce-Platform.git]
-cd nexus-ecommerce
-````
-
-### 2\. Backend Setup
-
-```bash
-cd backend
-npm install
-```
-
-Create a `.env` file in the `backend` directory:
-
-```env
-DATABASE_URL="postgresql://user:password@localhost:5432/nexus_db?schema=public"
-JWT_SECRET="your-super-secret-key"
-JWT_REFRESH_SECRET="your-refresh-secret-key"
-STRIPE_SECRET_KEY="sk_test_..."
-```
-
-Run database migrations and start the server:
-
-```bash
-npx prisma db push
-npm run start:dev
-```
-
-### 3\. Frontend Setup
-
-```bash
-cd frontend
-npm install
-```
-
-Create a `.env` file in the `frontend` directory:
-
-```env
-VITE_API_URL="http://localhost:3000/api/v1"
-VITE_STRIPE_PUBLIC_KEY="pk_test_..."
-```
-
-Start the client:
-
-```bash
-npm run dev
-```
-
------
-
-## 👨‍💻 Author
-
-**Nguyễn Quí Trọng**
-
-  * **Role:** Junior Backend Developer
-  * **Email:** nguyenquitrong12345@gmail.com
-  * **GitHub:** [Trongnguyen2404](https://www.google.com/search?q=https://github.com/Trongnguyen2404)
-
-*Feel free to reach out if you have any questions about this project\!*
-
-```
-```
+git clone [https://github.com/Trongnguyen2404/NEXUS-E-commerce-Platform.git](https://github.com/Trongnguyen2404/NEXUS-E-commerce-Platform.git)
+cd NEXUS-E-commerce-Platform
