@@ -1,13 +1,13 @@
 import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
-import { JwtAuthGuard } from 'src/common/guards/jwt-auth.guard';
-import { PaymentsService } from './payments.service';
-import { CreatePaymentIntentDto } from './dto/create-payment-intent.dto';
-import { GetUser } from 'src/common/decorators/get-user.decorator';
+import { JwtAuthGuard } from '@/common/guards/jwt-auth.guard';
+import { PaymentsService } from '@/modules/payments/payments.service';
+import { CreatePaymentIntentDto } from '@/modules/payments/dto/create-payment-intent.dto';
+import { GetUser } from '@/common/decorators/get-user.decorator';
 import {
   CreatePaymentIntentApiResponseDto,
   PaymentApiResponseDto,
-} from './dto/payment-response.dto';
-import { ConfirmPaymentDto } from './dto/confirm-payment.dto';
+} from '@/modules/payments/dto/payment-response.dto';
+import { ConfirmPaymentDto } from '@/modules/payments/dto/confirm-payment.dto';
 import { ApiBadRequestResponse, ApiBearerAuth, ApiCreatedResponse, ApiNotFoundResponse, ApiOkResponse, ApiOperation, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger';
 
 @Controller('payments')

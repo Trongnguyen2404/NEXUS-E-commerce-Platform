@@ -1,10 +1,10 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { PrismaService } from 'src/prisma/prisma.service';
+import { PrismaService } from '@/prisma/prisma.service';
 import Stripe from 'stripe';
-import { CreatePaymentIntentDto } from './dto/create-payment-intent.dto';
+import { CreatePaymentIntentDto } from '@/modules/payments/dto/create-payment-intent.dto';
 import { PaymentStatus, Prisma } from '@prisma/client';
-import { ConfirmPaymentDto } from './dto/confirm-payment.dto';
-import { PaymentResponseDto } from './dto/payment-response.dto';
+import { ConfirmPaymentDto } from '@/modules/payments/dto/confirm-payment.dto';
+import { PaymentResponseDto } from '@/modules/payments/dto/payment-response.dto';
 
 @Injectable()
 export class PaymentsService {
@@ -25,50 +25,77 @@ export class PaymentsService {
     data: { clientSecret: string; paymentId: string };
     message: string;
   }> {
-    const { orderId, amount, currency = 'usd' } = createPaymentIntentDto;
+    const { orderId, currency = 'usd' } = createPaymentIntentDto;
 
+    // 1. Zero-Trust: Tìm đơn hàng và lấy tổng tiền trực tiếp từ Database
     const order = await this.prisma.order.findFirst({
-      where: { id: orderId, userId },
+      where: { 
+        id: orderId, 
+        userId: userId // Đảm bảo người dùng chỉ có thể thanh toán đơn hàng của chính mình
+      },
     });
 
     if (!order) {
-      throw new NotFoundException(`Order with ID ${orderId} not found`);
+      throw new NotFoundException(`Không tìm thấy đơn hàng với ID ${orderId}`);
     }
 
+    // 2. Kiểm tra xem đơn hàng đã được thanh toán trước đó chưa
     const existingPayment = await this.prisma.payment.findFirst({
       where: { orderId },
     });
 
     if (existingPayment && existingPayment.status === PaymentStatus.COMPLETED) {
-      throw new BadRequestException('payment already completed for this order');
+      throw new BadRequestException('Đơn hàng này đã được thanh toán thành công trước đó');
     }
 
-    const paymentIntent = await this.stripe.paymentIntents.create({
-      amount: Math.round(amount * 100),
-      currency,
-      metadata: { orderId, userId },
-    });
+    // 3. Tính toán số tiền theo đơn vị nhỏ nhất (cents cho USD) để tránh sai số dấu phẩy động
+    // Chuyển Decimal từ Prisma sang number và nhân với 100
+    const amountInCents = Math.round(Number(order.totalAmount) * 100);
 
-    const payment = await this.prisma.payment.create({
-      data: {
-        orderId,
-        userId,
-        amount,
-        currency,
-        status: PaymentStatus.PENDING,
-        paymentMethod: 'STRIPE',
-        transactionId: paymentIntent.id,
-      },
-    });
+    try {
+      // 4. Tạo Payment Intent phía Stripe
+      const paymentIntent = await this.stripe.paymentIntents.create({
+        amount: amountInCents,
+        currency: currency,
+        metadata: { 
+          orderId: order.id, 
+          userId: userId 
+        },
+        description: createPaymentIntentDto.description || `Thanh toán đơn hàng #${order.id}`,
+      });
 
-    return {
-      success: true,
-      data: {
-        clientSecret: paymentIntent.client_secret!,
-        paymentId: payment.id,
-      },
-      message: 'Payment intent created successfully',
-    };
+      // 5. Lưu thông tin thanh toán vào Database với trạng thái PENDING
+      // Nếu đã có bản ghi payment cũ (bị lỗi hoặc pending), ta cập nhật, nếu chưa thì tạo mới
+      const payment = await this.prisma.payment.upsert({
+        where: { orderId: order.id },
+        update: {
+          status: PaymentStatus.PENDING,
+          transactionId: paymentIntent.id,
+          amount: order.totalAmount,
+        },
+        create: {
+          orderId: order.id,
+          userId: userId,
+          amount: order.totalAmount,
+          currency: currency,
+          status: PaymentStatus.PENDING,
+          paymentMethod: 'STRIPE',
+          transactionId: paymentIntent.id,
+        },
+      });
+
+      return {
+        success: true,
+        data: {
+          clientSecret: paymentIntent.client_secret!,
+          paymentId: payment.id,
+        },
+        message: 'Tạo yêu cầu thanh toán thành công',
+      };
+    } catch (error) {
+      // Xử lý lỗi từ phía Stripe hoặc Database
+      throw new BadRequestException(`Lỗi khi tạo thanh toán: ${error.message}`);
+    }
   }
 
   // Confirm payment intent

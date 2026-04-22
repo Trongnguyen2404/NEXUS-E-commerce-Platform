@@ -1,16 +1,16 @@
 import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Patch, Req, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiBody, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
-import { JwtAuthGuard } from 'src/common/guards/jwt-auth.guard';
-import { RolesGuard } from 'src/common/guards/roles.guard';
-import { UsersService } from './users.service';
-import { UserResponseDto } from './dto/user-response.dto';
-import { GetUser } from 'src/common/decorators/get-user.decorator';
+import { JwtAuthGuard } from '@/common/guards/jwt-auth.guard';
+import { RolesGuard } from '@/common/guards/roles.guard';
+import { UsersService } from '@/modules/users/users.service';
+import { UserResponseDto } from '@/modules/users/dto/user-response.dto';
+import { GetUser } from '@/common/decorators/get-user.decorator';
 import { promises } from 'dns';
-import type { RequestWithUser } from 'src/common/interfaces/request-with-user.interface';
-import { Roles } from 'src/common/decorators/roles.decorator';
+import type { RequestWithUser } from '@/common/interfaces/request-with-user.interface';
+import { Roles } from '@/common/decorators/roles.decorator';
 import { Role } from '@prisma/client';
-import { UpdateUserDto } from './dto/update-user.dto';
-import { ChangePasswordDto } from './dto/change-password.dto';
+import { UpdateUserDto } from '@/modules/users/dto/update-user.dto';
+import { ChangePasswordDto } from '@/modules/users/dto/change-password.dto';
 
 
 @ApiTags('users')

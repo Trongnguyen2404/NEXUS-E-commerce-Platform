@@ -107,6 +107,7 @@ model OrderItem {
   id        String  @id @default(uuid())
   quantity  Int
   price     Decimal @db.Decimal(10, 2)
+  productName String @default("unknown") //for data Snapshot
   productId String
   product   Product @relation(fields: [productId], references: [id])
 

@@ -5,10 +5,6 @@ export class CreatePaymentIntentDto {
   @IsString()
   orderId: string;
 
-  @IsNotEmpty()
-  @IsNumber()
-  amount: number;
-
   @IsOptional()
   @IsString()
   currency?: string = 'usd';

@@ -1,11 +1,11 @@
 import { Body, Controller, HttpCode, HttpStatus, Post, UseGuards } from '@nestjs/common';
-import { AuthService } from './auth.service';
-import { RegisterDto } from './Dto/register.dto';
-import { AuthResponseDto } from './Dto/auth-responsive.dto';
-import { RefreshTokenGuard } from './guards/refresh-token.guard';
-import { GetUser } from 'src/common/decorators/get-user.decorator';
-import { JwtAuthGuard } from 'src/common/guards/jwt-auth.guard';
-import { LoginDto } from './Dto/login.dto';
+import { AuthService } from '@/modules/auth/auth.service';
+import { RegisterDto } from '@/modules/auth/Dto/register.dto';
+import { AuthResponseDto } from '@/modules/auth/Dto/auth-responsive.dto';
+import { RefreshTokenGuard } from '@/modules/auth/guards/refresh-token.guard';
+import { GetUser } from '@/common/decorators/get-user.decorator';
+import { JwtAuthGuard } from '@/common/guards/jwt-auth.guard';
+import { LoginDto } from '@/modules/auth/Dto/login.dto';
 import { ApiBearerAuth, ApiOperation, ApiResponse } from '@nestjs/swagger';
 
 @Controller('auth')

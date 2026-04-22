@@ -1,14 +1,14 @@
 import { ConflictException, Injectable, InternalServerErrorException, UnauthorizedException } from '@nestjs/common';
-import { PrismaService } from 'src/prisma/prisma.service';
-import { RegisterDto } from './Dto/register.dto';
+import { PrismaService } from '@/prisma/prisma.service';
+import { RegisterDto } from '@/modules/auth/Dto/register.dto';
 
-import { AuthResponseDto } from './Dto/auth-responsive.dto';
+import { AuthResponseDto } from '@/modules/auth/Dto/auth-responsive.dto';
 import * as bcrypt from 'bcrypt';
 import { ARRAY_UNIQUE } from 'class-validator';
 import { promises } from 'dns';
 import { randomBytes } from 'crypto';
 import { JwtService } from '@nestjs/jwt';
-import { LoginDto } from './Dto/login.dto';
+import { LoginDto } from '@/modules/auth/Dto/login.dto';
 import * as jwt from 'jsonwebtoken';
 import { ConfigService } from '@nestjs/config';
 import * as crypto from 'crypto';

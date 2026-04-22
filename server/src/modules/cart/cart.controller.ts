@@ -1,12 +1,12 @@
 import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Patch, Post, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiBody, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
-import { JwtAuthGuard } from 'src/common/guards/jwt-auth.guard';
-import { CartService } from './cart.service';
-import { CartResponseDto } from './dto/cart-response.dto';
-import { GetUser } from 'src/common/decorators/get-user.decorator';
-import { AddToCartDto } from './dto/add-to-cart.dto';
-import { UpdateCartItemDto } from './dto/update-cart-item.dto';
-import { MergeCartDto } from './dto/merge-cart.dto';
+import { JwtAuthGuard } from '@/common/guards/jwt-auth.guard';
+import { CartService } from '@/modules/cart/cart.service';
+import { CartResponseDto } from '@/modules/cart/dto/cart-response.dto';
+import { GetUser } from '@/common/decorators/get-user.decorator';
+import { AddToCartDto } from '@/modules/cart/dto/add-to-cart.dto';
+import { UpdateCartItemDto } from '@/modules/cart/dto/update-cart-item.dto';
+import { MergeCartDto } from '@/modules/cart/dto/merge-cart.dto';
 
 /**
  * Cart Controller

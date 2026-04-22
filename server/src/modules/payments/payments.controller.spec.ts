@@ -1,5 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { PaymentsController } from './payments.controller';
+import { PaymentsController } from '@/modules/payments/payments.controller';
 
 describe('PaymentsController', () => {
   let controller: PaymentsController;

@@ -1,10 +1,11 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { PrismaService } from 'src/prisma/prisma.service';
-import { CreateOrderDto } from './dto/create-order.dto';
-import { OrderApiResponseDto, OrderResponseDto } from './dto/order-response.dto';
+import { PrismaService } from '@/prisma/prisma.service';
+import { CreateOrderDto } from '@/modules/orders/dto/create-order.dto';
+import { OrderApiResponseDto, OrderResponseDto } from '@/modules/orders/dto/order-response.dto';
 import { Order, OrderItem, OrderStatus, Prisma, Product, User } from '@prisma/client';
-import { QueryOrderDto } from './dto/query-order.dto';
-import { UpdateOrderDto } from './dto/update-order.dto';
+import { QueryOrderDto } from '@/modules/orders/dto/query-order.dto';
+import { UpdateOrderDto } from '@/modules/orders/dto/update-order.dto';
+import { Cron, CronExpression } from '@nestjs/schedule';
 
 @Injectable()
 export class OrdersService {
@@ -16,6 +17,15 @@ export class OrdersService {
         createOrderDto: CreateOrderDto,
     ): Promise<OrderApiResponseDto<OrderResponseDto>> {
         const { items, shippingAddress } = createOrderDto;
+
+        const orderItemsData: {
+            productId: string;
+            productName: string;
+            quantity: number;
+            price: number;
+        }[] = [];
+
+        let totalAmount = 0;
 
         for (const item of items) {
             const product = await this.prisma.product.findUnique({
@@ -30,15 +40,21 @@ export class OrdersService {
 
             if (product.stock < item.quantity) {
                 throw new BadRequestException(
-                    `Insufficient stock for product  ${product.name}.  Available: ${product.stock}, Requested: ${item.quantity}`,
+                    `Insufficient stock for product ${product.name}. Available: ${product.stock}, Requested: ${item.quantity}`,
                 );
             }
-        }
 
-        const total = items.reduce(
-            (sum, item) => sum + item.price * item.quantity,
-            0,
-        );
+            const productPrice = Number(product.price);
+
+            orderItemsData.push({
+                productId: product.id,
+                productName: product.name, // Snapshot
+                quantity: item.quantity,
+                price: productPrice,
+            });
+
+            totalAmount += productPrice * item.quantity;
+        }
 
         const latestCart = await this.prisma.cart.findFirst({
             where: {
@@ -51,18 +67,38 @@ export class OrdersService {
         });
 
         const order = await this.prisma.$transaction(async (tx) => {
+            
+            for (const item of orderItemsData) {
+                const updatedProduct = await tx.product.updateMany({
+                    where: {
+                        id: item.productId,
+                        stock: { gte: item.quantity },
+                    },
+                    data: {
+                        stock: { decrement: item.quantity },
+                    },
+                });
+
+                if (updatedProduct.count === 0) {
+                    throw new BadRequestException(
+                        `Product ${item.productName} is out of stock due to concurrent purchases.`,
+                    );
+                }
+            }
+
             const newOrder = await tx.order.create({
                 data: {
                     userId,
                     status: OrderStatus.PENDING,
-                    totalAmount: total,
+                    totalAmount: totalAmount, 
                     shippingAddress,
-                    cartId: latestCart?.id,
+                    cartId: latestCart?.id || null,
                     orderItems: {
-                        create: items.map((item) => ({
+                        create: orderItemsData.map((item) => ({
                             productId: item.productId,
+                            productName: item.productName,
                             quantity: item.quantity,
-                            price: item.price,
+                            price: item.price, 
                         })),
                     },
                 },
@@ -76,16 +112,18 @@ export class OrdersService {
                 },
             });
 
-            for (const item of items) {
-                await tx.product.update({
-                    where: { id: item.productId },
-                    data: { stock: { decrement: item.quantity } },
+            if (latestCart) {
+                await tx.cart.update({
+                    where: { id: latestCart.id },
+                    data: { checkedOut: true },
                 });
             }
+
             return newOrder;
         });
+
         return this.wrap(order);
-    }
+    }   
 
     // Get all orders for admin
     async findAllForAdmin(query: QueryOrderDto): Promise<{
@@ -324,5 +362,30 @@ export class OrdersService {
             createdAt: order.createdAt,
             updatedAt: order.updatedAt,
         };
+    }
+
+    @Cron(CronExpression.EVERY_5_MINUTES)
+    async autoCancelExpiredOrders() {
+        const fifteenMinutesAgo = new Date(Date.now() - 15 * 60 * 1000);
+        
+        const expiredOrders = await this.prisma.order.findMany({
+            where: {
+                status: 'PENDING',
+                createdAt: { lt: fifteenMinutesAgo }
+            }
+        });
+
+        if (expiredOrders.length > 0) {
+            console.log(`[CronJob] Found ${expiredOrders.length} expired orders. Cleaning up...`);
+        }
+
+        for (const order of expiredOrders) {
+            try {
+                await this.cancel(order.id);
+                console.log(`[CronJob] Order ${order.id} has been automatically cancelled and the inventory has been returned.`);
+            } catch (error) {
+                console.error(`[CronJob] Error canceling order ${order.id}:`, error);
+            }
+        }
     }
 }

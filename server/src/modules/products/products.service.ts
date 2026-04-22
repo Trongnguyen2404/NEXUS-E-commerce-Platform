@@ -1,10 +1,10 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
-import { PrismaService } from 'src/prisma/prisma.service';
-import { CreateProductDto } from './dto/create-product.dto';
-import { ProductResponseDto } from './dto/product-response.dto';
+import { PrismaService } from '@/prisma/prisma.service';
+import { CreateProductDto } from '@/modules/products/dto/create-product.dto';
+import { ProductResponseDto } from '@/modules/products/dto/product-response.dto';
 import { Category, Prisma, Product } from '@prisma/client';
-import { QueryProductDto } from './dto/query-product.dto';
-import { UpdateProductDto } from './dto/update-product.dto';
+import { QueryProductDto } from '@/modules/products/dto/query-product.dto';
+import { UpdateProductDto } from '@/modules/products/dto/update-product.dto';
 
 @Injectable()
 export class ProductsService {
@@ -164,28 +164,43 @@ export class ProductsService {
 
     // Update product stock
     async updateStock(id: string, quantity: number): Promise<ProductResponseDto> {
-        const product = await this.prisma.product.findUnique({
-            where: { id },
-        });
-        if (!product) {
-            throw new NotFoundException('Product not found');
+        if (quantity < 0) {
+            const result = await this.prisma.product.updateMany({
+                where: {
+                    id: id,
+                    stock: { gte: Math.abs(quantity) },
+                },
+                data: {
+                    stock: { increment: quantity },
+                },
+            });
+
+            if (result.count === 0) {
+                const productExists = await this.prisma.product.findUnique({ where: { id } });
+                if (!productExists) {
+                    throw new NotFoundException('Product not found');
+                }
+                throw new BadRequestException('Insufficient stock to perform this operation');
+            }
+        } else {
+            const result = await this.prisma.product.updateMany({
+                where: { id: id },
+                data: {
+                    stock: { increment: quantity },
+                },
+            });
+
+            if (result.count === 0) {
+                throw new NotFoundException('Product not found');
+            }
         }
 
-        const newStock = product.stock + quantity;
-
-        if (newStock < 0) {
-            throw new BadRequestException('Insufficient stock');
-        }
-
-        const updatedProduct = await this.prisma.product.update({
+        const updatedProduct = await this.prisma.product.findUnique({
             where: { id },
-            data: { stock: newStock },
-            include: {
-                category: true,
-            },
+            include: { category: true },
         });
 
-        return this.formatProduct(updatedProduct);
+        return this.formatProduct(updatedProduct!);
     }
 
     // Remove a product

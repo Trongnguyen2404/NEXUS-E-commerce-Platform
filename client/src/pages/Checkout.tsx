@@ -12,8 +12,7 @@ import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-
 // ==========================================
 // ⚠️ Replace with your actual Stripe Public Key
 // ==========================================
-const stripePromise = loadStripe('pk_test_51TDrt41h8wor8q38Bu9azh8upAzegeMWFAtI3AQqXnhqt6IN18HStRarkvmhryuwWGpq60MbcWjobiYqjftsaNuj00WGRCGbON');
-
+const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLIC_KEY);
 // ------------------------------------------------------------------
 // COMPONENT 1: The Stripe Payment Form (Rendered in Step 2)
 // ------------------------------------------------------------------
@@ -50,8 +49,6 @@ const PaymentForm = ({ orderId, clientSecret }: { orderId: string, clientSecret:
           orderId: orderId,
         });
 
-        // 3. Delete Cart items after successful payment
-        await axiosClient.delete('/cart');
         await fetchCart();
 
         toast.success('Payment successful! Order completed.');
@@ -68,10 +65,10 @@ const PaymentForm = ({ orderId, clientSecret }: { orderId: string, clientSecret:
     <form onSubmit={handlePaymentSubmit} className="space-y-6 mt-6">
       <div className="bg-[#F5F5F7] p-4 rounded-xl">
         {/* Stripe's secure pre-built UI element */}
-        <PaymentElement /> 
+        <PaymentElement />
       </div>
-      <button 
-        type="submit" 
+      <button
+        type="submit"
         disabled={!stripe || isProcessing}
         className="w-full bg-blue-600 text-white py-5 rounded-2xl font-black uppercase tracking-widest text-sm hover:bg-blue-700 transition-all shadow-xl shadow-blue-500/20 flex items-center justify-center disabled:opacity-50"
       >
@@ -88,10 +85,10 @@ const PaymentForm = ({ orderId, clientSecret }: { orderId: string, clientSecret:
 const Checkout = () => {
   const navigate = useNavigate();
   const { cart, fetchCart } = useCartStore();
-  
+
   const [address, setAddress] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
-  
+
   // State for Step 2 (Payment)
   const [clientSecret, setClientSecret] = useState<string | null>(null);
   const [currentOrderId, setCurrentOrderId] = useState<string | null>(null);
@@ -124,26 +121,29 @@ const Checkout = () => {
         items: cart.cartItems.map((item: any) => ({
           productId: item.product.id,
           quantity: item.quantity,
-          price: Number(item.product.price)
+          // price: Number(item.product.price)
         }))
       };
 
       const orderResponse: any = await axiosClient.post('/orders', orderData);
-      // Adjust this based on exactly what your POST /orders returns (e.g., orderResponse.id or orderResponse.data.id)
-      const createdOrderId = orderResponse.id || orderResponse.data?.id; 
+      const createdOrderId = orderResponse.data?.id || orderResponse.id;
+
+      const realTotalAmount = orderResponse.data?.totalAmount || orderResponse.totalAmount;
+
+      if (realTotalAmount && Number(realTotalAmount) !== Number(cart.totalPrice)) {
+        toast.info('The prices of some products have been updated since you added them to your cart.');
+      }
 
       if (!createdOrderId) throw new Error('Order creation failed to return an ID');
 
-      // 2. Call your PaymentsController to create a Stripe Intent
       const paymentResponse: any = await axiosClient.post('/payments/create-intent', {
         orderId: createdOrderId,
-        amount: Number(cart.totalPrice)
+        // amount: Number(cart.totalPrice)
       });
 
-      // 3. Move to Step 2 (Show Stripe Form)
       setCurrentOrderId(createdOrderId);
-      setClientSecret(paymentResponse.data.clientSecret);
-      
+      setClientSecret(paymentResponse.data?.clientSecret || paymentResponse.clientSecret);
+
     } catch (error: any) {
       toast.error(error.message || 'Failed to initialize payment.');
     } finally {
@@ -156,17 +156,17 @@ const Checkout = () => {
   return (
     <div className="min-h-screen bg-white pb-24">
       <div className="max-w-[1200px] mx-auto px-4 sm:px-6 lg:px-8 pt-10">
-        
+
         <button onClick={() => navigate('/cart')} className="flex items-center space-x-2 text-gray-400 hover:text-black transition-colors mb-10">
           <ArrowLeft size={16} />
           <span className="text-xs font-semibold uppercase tracking-widest">Back to Cart</span>
         </button>
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-start">
-          
+
           {/* LEFT COLUMN: Forms */}
           <div className="lg:col-span-7 space-y-8">
-            
+
             {/* STEP 1: Shipping Address */}
             {!clientSecret ? (
               <div className="bg-[#F5F5F7] rounded-3xl p-10 border border-gray-100">
@@ -174,7 +174,7 @@ const Checkout = () => {
                 <form onSubmit={handleProceedToPayment} className="space-y-6">
                   <div>
                     <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-3">Full Shipping Address</label>
-                    <textarea 
+                    <textarea
                       required
                       value={address}
                       onChange={(e) => setAddress(e.target.value)}
@@ -183,7 +183,7 @@ const Checkout = () => {
                     />
                   </div>
 
-                  <button 
+                  <button
                     type="submit"
                     disabled={isSubmitting}
                     className="w-full bg-black text-white py-5 rounded-2xl font-black uppercase tracking-widest text-sm hover:bg-gray-800 transition-all shadow-lg shadow-black/10 flex items-center justify-center space-x-3 disabled:opacity-50"
@@ -216,7 +216,7 @@ const Checkout = () => {
           <div className="lg:col-span-5">
             <div className="bg-[#F5F5F7] rounded-3xl p-8 border border-gray-100 sticky top-24">
               <h2 className="text-xl font-black uppercase tracking-tight mb-6">In Your Bag</h2>
-              
+
               <div className="max-h-[300px] overflow-y-auto pr-2 space-y-4 mb-8">
                 {cart.cartItems.map((item: any) => (
                   <div key={item.id} className="flex items-center space-x-4">

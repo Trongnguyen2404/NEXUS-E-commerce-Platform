@@ -1,5 +1,5 @@
 import { IsEnum, IsOptional, IsString } from "class-validator";
-import { OrderStatus } from "./query-order.dto";
+import { OrderStatus } from "@/modules/orders/dto/query-order.dto";
 
 export class UpdateOrderDto {
   @IsOptional()

@@ -1,14 +1,14 @@
 import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Patch, Post, Query, UseGuards, UsePipes, ValidationPipe } from '@nestjs/common';
 import { ApiBearerAuth, ApiBody, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
-import { CategoryService } from './category.service';
-import { JwtAuthGuard } from 'src/common/guards/jwt-auth.guard';
-import { RolesGuard } from 'src/common/guards/roles.guard';
-import { Roles } from 'src/common/decorators/roles.decorator';
+import { CategoryService } from '@/modules/category/category.service';
+import { JwtAuthGuard } from '@/common/guards/jwt-auth.guard';
+import { RolesGuard } from '@/common/guards/roles.guard';
+import { Roles } from '@/common/decorators/roles.decorator';
 import { Role } from '@prisma/client';
-import { CreateCategoryDto } from './dto/create-category.dto';
-import { CategoryResponseDto } from './dto/category-response.dto';
-import { QueryCategoryDto } from './dto/query-category.dto';
-import { UpdateCategoryDto } from './dto/update-category.dto';
+import { CreateCategoryDto } from '@/modules/category/dto/create-category.dto';
+import { CategoryResponseDto } from '@/modules/category/dto/category-response.dto';
+import { QueryCategoryDto } from '@/modules/category/dto/query-category.dto';
+import { UpdateCategoryDto } from '@/modules/category/dto/update-category.dto';
 
 @ApiTags('Categories')
 @Controller('categories')
