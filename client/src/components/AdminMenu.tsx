@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuthStore } from '../store/useAuthStore';
-import { Shield, Package, Layers, X, ShoppingCart, Users } from 'lucide-react';
+// Thêm MessageSquare vào đây
+import { Shield, Package, Layers, X, ShoppingCart, Users, MessageSquare } from 'lucide-react';
 
 const AdminMenu = () => {
   const { user } = useAuthStore();
@@ -15,10 +16,9 @@ const AdminMenu = () => {
   const menuItems = [
     { path: '/admin/products', label: 'Products', icon: Package },
     { path: '/admin/categories', label: 'Categories', icon: Layers },
-    { path: '/admin/orders', label: 'Orders', icon: ShoppingCart }, // DÒNG MỚI
+    { path: '/admin/orders', label: 'Orders', icon: ShoppingCart },
     { path: '/admin/users', label: 'Users', icon: Users },
-    // Dành cho tính năng duyệt đơn hàng sắp tới:
-    // { path: '/admin/orders', label: 'Orders', icon: ShoppingCart },
+    { path: '/admin/contacts', label: 'Contacts', icon: MessageSquare }, // MỤC MỚI ĐÂY NÈ!
   ];
 
   return (
@@ -26,7 +26,7 @@ const AdminMenu = () => {
       {/* Khối Menu sổ lên */}
       {isOpen && (
         <div className="bg-white p-4 rounded-3xl mb-4 shadow-2xl border border-gray-200 flex flex-col gap-2 w-56 animate-in slide-in-from-bottom-4 duration-200">
-          <div className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2 px-3 pt-2">
+          <div className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2 px-3 pt-2 border-b border-gray-50 pb-2">
             Admin Portal
           </div>
           {menuItems.map(item => {
@@ -56,7 +56,7 @@ const AdminMenu = () => {
         }`}
       >
         {isOpen ? <X size={20} /> : <Shield size={20} />}
-        {!isOpen && <span>Admin</span>}
+        {!isOpen && <span>Admin Menu</span>}
       </button>
     </div>
   );

@@ -27,11 +27,10 @@ export class PaymentsService {
   }> {
     const { orderId, currency = 'usd' } = createPaymentIntentDto;
 
-    // 1. Zero-Trust: Tìm đơn hàng và lấy tổng tiền trực tiếp từ Database
     const order = await this.prisma.order.findFirst({
       where: { 
         id: orderId, 
-        userId: userId // Đảm bảo người dùng chỉ có thể thanh toán đơn hàng của chính mình
+        userId: userId
       },
     });
 
@@ -39,7 +38,6 @@ export class PaymentsService {
       throw new NotFoundException(`Không tìm thấy đơn hàng với ID ${orderId}`);
     }
 
-    // 2. Kiểm tra xem đơn hàng đã được thanh toán trước đó chưa
     const existingPayment = await this.prisma.payment.findFirst({
       where: { orderId },
     });
@@ -48,8 +46,6 @@ export class PaymentsService {
       throw new BadRequestException('Đơn hàng này đã được thanh toán thành công trước đó');
     }
 
-    // 3. Tính toán số tiền theo đơn vị nhỏ nhất (cents cho USD) để tránh sai số dấu phẩy động
-    // Chuyển Decimal từ Prisma sang number và nhân với 100
     const amountInCents = Math.round(Number(order.totalAmount) * 100);
 
     try {
@@ -64,8 +60,6 @@ export class PaymentsService {
         description: createPaymentIntentDto.description || `Thanh toán đơn hàng #${order.id}`,
       });
 
-      // 5. Lưu thông tin thanh toán vào Database với trạng thái PENDING
-      // Nếu đã có bản ghi payment cũ (bị lỗi hoặc pending), ta cập nhật, nếu chưa thì tạo mới
       const payment = await this.prisma.payment.upsert({
         where: { orderId: order.id },
         update: {
@@ -98,7 +92,6 @@ export class PaymentsService {
     }
   }
 
-  // Confirm payment intent
   async confirmPayment(
     userId: string,
     confirmPaymentDto: ConfirmPaymentDto,

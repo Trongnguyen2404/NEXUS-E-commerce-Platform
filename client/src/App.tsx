@@ -22,6 +22,7 @@ import AdminCategories from './pages/AdminCategories';
 import AdminMenu from './components/AdminMenu';
 import AdminOrders from './pages/AdminOrders';
 import AdminUsers from './pages/AdminUsers';
+import AdminContacts from './pages/AdminContacts';
 
 
 const Navbar = () => {
@@ -108,6 +109,7 @@ function App() {
               <Route path="/admin/categories" element={<AdminCategories />} />
               <Route path="/admin/orders" element={<AdminOrders />} />
               <Route path="/admin/users" element={<AdminUsers />} />
+              <Route path="/admin/contacts" element={<AdminContacts />} />
             </Route>
           </Routes>
         </main>

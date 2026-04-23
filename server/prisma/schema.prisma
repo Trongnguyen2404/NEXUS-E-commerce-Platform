@@ -36,6 +36,12 @@ enum PaymentStatus {
   REFUNDED
 }
 
+enum ContactStatus {
+  PENDING
+  READ
+  REPLIED
+}
+
 model User {
   id           String  @id @default(uuid())
   email        String  @unique
@@ -204,4 +210,17 @@ model Payment {
   @@index([userId])
   @@index([transactionId])
   @@map("payments")
+}
+
+model Contact {
+  id        String   @id @default(uuid())
+  name      String
+  email     String
+  subject   String
+  message   String
+  status    ContactStatus   @default(PENDING)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("contacts")
 }

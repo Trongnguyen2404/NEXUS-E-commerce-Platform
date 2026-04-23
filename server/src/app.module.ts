@@ -13,6 +13,7 @@ import { CartModule } from '@/modules/cart/cart.module';
 import { PaymentsModule } from '@/modules/payments/payments.module';
 import { APP_GUARD } from '@nestjs/core';
 import { ScheduleModule } from '@nestjs/schedule';
+import { ContactsModule } from './modules/contacts/contacts.module';
 
 @Module({
   imports: [
@@ -28,7 +29,7 @@ import { ScheduleModule } from '@nestjs/schedule';
       },
     ]),
     PrismaModule,  
-    AuthModule, UsersModule, CategoryModule, ProductsModule, OrdersModule, CartModule, PaymentsModule
+    AuthModule, UsersModule, CategoryModule, ProductsModule, OrdersModule, CartModule, PaymentsModule, ContactsModule
   ],
   controllers: [AppController],
   providers: [
