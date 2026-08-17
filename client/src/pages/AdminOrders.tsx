@@ -1,17 +1,31 @@
 import { useState, useEffect } from 'react';
-import { Loader2, Trash2, Package, MapPin } from 'lucide-react';
+import { Loader2, Trash2, Package } from 'lucide-react';
 import { toast } from 'react-toastify';
-import axiosClient from '../api/axiosClient';
+import axiosClient, { getErrorMessage } from '../api/axiosClient';
+import type { Order, OrderStatus, PageResponse } from '../types/api';
+
+/**
+ * Tinted rather than saturated fills. White-on-#007AFF pills shouted louder
+ * than anything else on the page; a soft background with dark text carries the
+ * same meaning and every pair here measures above 4.5:1.
+ */
+const STATUS_STYLES: Record<OrderStatus, string> = {
+  PENDING: 'bg-state-warning-soft text-state-warning',
+  PROCESSING: 'bg-state-info-soft text-state-info',
+  SHIPPED: 'bg-brand-soft text-brand-ink',
+  DELIVERED: 'bg-state-success-soft text-state-success',
+  CANCELLED: 'bg-state-danger-soft text-state-danger',
+};
 
 const AdminOrders = () => {
-  const [orders, setOrders] = useState<any[]>([]);
+  const [orders, setOrders] = useState<Order[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   const fetchOrders = async () => {
     try {
-      const res: any = await axiosClient.get('/orders/admin/all');
-      setOrders(Array.isArray(res?.data) ? res.data : (res || []));
-    } catch (e) {
+      const res = await axiosClient.get<PageResponse<Order>>('/orders/admin/all');
+      setOrders(Array.isArray(res?.data) ? res.data : []);
+    } catch {
       toast.error('Failed to load orders');
     } finally {
       setIsLoading(false);
@@ -21,13 +35,13 @@ const AdminOrders = () => {
   useEffect(() => { fetchOrders(); }, []);
 
   // Đổi trạng thái đơn hàng (PENDING -> PROCESSING -> SHIPPED -> DELIVERED)
-  const handleStatusChange = async (id: string, newStatus: string) => {
+  const handleStatusChange = async (id: string, newStatus: OrderStatus) => {
     try {
       await axiosClient.patch(`/orders/admin/${id}`, { status: newStatus });
       toast.success('Order status updated!');
       fetchOrders();
-    } catch (e: any) {
-      toast.error(e.message || 'Update failed');
+    } catch (e) {
+      toast.error(getErrorMessage(e, 'Update failed'));
     }
   };
 
@@ -38,8 +52,8 @@ const AdminOrders = () => {
       await axiosClient.delete(`/orders/admin/${id}`);
       toast.success('Order deleted');
       fetchOrders();
-    } catch (e: any) {
-      toast.error(e.message || 'Delete failed');
+    } catch (e) {
+      toast.error(getErrorMessage(e, 'Delete failed'));
     }
   };
 
@@ -93,13 +107,8 @@ const AdminOrders = () => {
                   <td className="py-5 px-4 text-center">
                     <select 
                       value={o.status}
-                      onChange={(e) => handleStatusChange(o.id, e.target.value)}
-                      className={`px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest outline-none cursor-pointer appearance-none border-2 border-transparent focus:border-black transition-all ${
-                        o.status === 'PENDING' ? 'bg-[#FF8A00] text-white' : 
-                        o.status === 'PROCESSING' ? 'bg-[#007AFF] text-white' : 
-                        o.status === 'CANCELLED' ? 'bg-[#E30000] text-white' : 
-                        'bg-[#28A745] text-white'
-                      }`}
+                      onChange={(e) => handleStatusChange(o.id, e.target.value as OrderStatus)}
+                      className={`px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest outline-none cursor-pointer appearance-none border-2 border-transparent focus:border-black transition-all ${STATUS_STYLES[o.status] ?? STATUS_STYLES.PENDING}`}
                     >
                       <option value="PENDING" className="bg-white text-black">PENDING</option>
                       <option value="PROCESSING" className="bg-white text-black">PROCESSING</option>
@@ -110,7 +119,7 @@ const AdminOrders = () => {
                   </td>
 
                   <td className="py-5 px-4 text-right">
-                    <button onClick={() => handleDelete(o.id)} className="p-3 bg-red-50 text-red-500 hover:bg-[#E30000] hover:text-white rounded-xl transition-colors">
+                    <button onClick={() => handleDelete(o.id)} className="p-3 bg-state-danger-soft text-state-danger hover:bg-state-danger hover:text-white rounded-xl transition-colors">
                       <Trash2 size={16} />
                     </button>
                   </td>

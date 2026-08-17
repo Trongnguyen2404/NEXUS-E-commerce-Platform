@@ -1,5 +1,9 @@
-import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, HttpStatus, Param, Post, UseGuards } from '@nestjs/common';
+import { Role } from '@prisma/client';
 import { JwtAuthGuard } from '@/common/guards/jwt-auth.guard';
+import { RolesGuard } from '@/common/guards/roles.guard';
+import { Roles } from '@/common/decorators/roles.decorator';
+import { RefundPaymentDto } from '@/modules/payments/dto/refund-payment.dto';
 import { PaymentsService } from '@/modules/payments/payments.service';
 import { CreatePaymentIntentDto } from '@/modules/payments/dto/create-payment-intent.dto';
 import { GetUser } from '@/common/decorators/get-user.decorator';
@@ -57,6 +61,28 @@ export class PaymentsController {
     @GetUser('id') userId: string,
   ) {
     return await this.paymentsService.confirmPayment(userId, confirmPaymentDto);
+  }
+
+  @Post('admin/:id/refund')
+  @UseGuards(RolesGuard)
+  @Roles(Role.ADMIN)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: '[ADMIN] Refund a payment',
+    description:
+      'Sends money back through Stripe. Omit `amount` for a full refund, which also cancels the order and — only if it has not shipped — returns the stock.',
+  })
+  @ApiParam({ name: 'id', description: 'Payment ID' })
+  @ApiOkResponse({
+    description: 'Refund issued',
+    type: PaymentApiResponseDto,
+  })
+  @ApiBadRequestResponse({
+    description: 'Payment is not refundable, or the amount exceeds what is left',
+  })
+  @ApiNotFoundResponse({ description: 'Payment not found' })
+  async refund(@Param('id') id: string, @Body() refundPaymentDto: RefundPaymentDto) {
+    return await this.paymentsService.refund(id, refundPaymentDto);
   }
 
   @Get()

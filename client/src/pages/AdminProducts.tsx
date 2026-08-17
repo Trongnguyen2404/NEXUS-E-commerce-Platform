@@ -1,17 +1,20 @@
 import { useState, useEffect } from 'react';
-import { Loader2, Plus, Trash2, Edit3, X, Image as ImageIcon, Box } from 'lucide-react';
+import { Loader2, Plus, Trash2, Edit3, X, Image as ImageIcon, Box, Layers } from 'lucide-react';
 import { toast } from 'react-toastify';
-import axiosClient from '../api/axiosClient';
+import axiosClient, { getErrorMessage } from '../api/axiosClient';
+import VariantManager from '../components/VariantManager';
+import type { Category, PageResponse, PaginatedResponse, Product } from '../types/api';
 
 const AdminProducts = () => {
-  const [products, setProducts] = useState<any[]>([]);
-  const [categories, setCategories] = useState<any[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   
   // Modal States
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null); // NẾU CÓ ID LÀ ĐANG EDIT
+  const [managingVariants, setManagingVariants] = useState<Product | null>(null);
   
   // Form State
   const [formData, setFormData] = useState({
@@ -20,14 +23,14 @@ const AdminProducts = () => {
 
   const fetchData = async () => {
     try {
-      const [prodRes, catRes]: any = await Promise.all([
-        axiosClient.get('/products', { params: { limit: 100 } }),
-        axiosClient.get('/categories')
+      const [prodRes, catRes] = await Promise.all([
+        axiosClient.get<PaginatedResponse<Product>>('/products', { params: { limit: 100 } }),
+        axiosClient.get<PageResponse<Category>>('/categories')
       ]);
       setProducts(prodRes?.data || []);
-      setCategories(Array.isArray(catRes?.data) ? catRes.data : (catRes || []));
-    } catch (e: any) {
-      toast.error('Error loading data');
+      setCategories(Array.isArray(catRes?.data) ? catRes.data : []);
+    } catch (e) {
+      toast.error(getErrorMessage(e, 'Error loading data'));
     } finally {
       setIsLoading(false);
     }
@@ -49,13 +52,13 @@ const AdminProducts = () => {
       await axiosClient.delete(`/products/${id}`);
       toast.success('Product deleted successfully');
       fetchData();
-    } catch (e: any) {
-      toast.error(e.message || 'Deletion failed. Product might be in an order.');
+    } catch (e) {
+      toast.error(getErrorMessage(e, 'Deletion failed. Product might be in an order.'));
     }
   };
 
   // MỞ FORM EDIT: Đổ dữ liệu cũ vào Form
-  const openEditModal = (product: any) => {
+  const openEditModal = (product: Product) => {
     setEditingId(product.id);
     setFormData({
       name: product.name || '',
@@ -101,9 +104,8 @@ const AdminProducts = () => {
 
       setIsModalOpen(false);
       fetchData();
-    } catch (err: any) {
-      const msg = Array.isArray(err.message) ? err.message[0] : (err.message || 'Action failed');
-      toast.error(msg);
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Action failed'));
     } finally {
       setIsSubmitting(false);
     }
@@ -147,7 +149,7 @@ const AdminProducts = () => {
                 <tr key={p.id} className="hover:bg-[#F5F5F7] transition-all">
                   <td className="py-4 px-4 flex items-center space-x-4">
                     <div className="w-14 h-14 bg-white rounded-xl border border-gray-200 p-2 flex items-center justify-center shrink-0">
-                      <img src={p.imageUrl} alt="" className="max-w-full max-h-full object-contain brightness-[1.02] contrast-[1.05]" style={{ imageRendering: 'webkit-optimize-contrast' as any }} />
+                      <img src={p.imageUrl ?? ''} alt="" className="max-w-full max-h-full object-contain brightness-[1.02] contrast-[1.05]" />
                     </div>
                     <span className="font-bold text-sm uppercase text-black max-w-[200px] truncate">{p.name}</span>
                   </td>
@@ -156,16 +158,34 @@ const AdminProducts = () => {
                     <span className="bg-gray-200 text-black px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest">{p.category || 'N/A'}</span>
                   </td>
                   <td className="py-4 px-4 text-center">
-                    <span className={`px-3 py-1.5 rounded-lg text-[10px] font-black ${p.stock > 10 ? 'bg-[#28A745] text-white' : p.stock > 0 ? 'bg-[#FF8A00] text-white' : 'bg-[#E30000] text-white'}`}>{p.stock}</span>
+                    <span className={`px-3 py-1.5 rounded-lg text-[10px] font-black ${
+                      p.stock > 10
+                        ? 'bg-state-success-soft text-state-success'
+                        : p.stock > 0
+                          ? 'bg-state-warning-soft text-state-warning'
+                          : 'bg-state-danger-soft text-state-danger'
+                    }`}>{p.stock}</span>
                   </td>
                   <td className="py-4 px-4 text-right font-black text-sm text-black">${Number(p.price).toFixed(2)}</td>
                   <td className="py-4 px-4 text-right space-x-2 whitespace-nowrap">
+                    {/* NÚT OPTIONS (biến thể) */}
+                    <button
+                      onClick={() => setManagingVariants(p)}
+                      title={p.hasVariants ? `${p.variants.length} options` : 'Add options'}
+                      className={`p-3 rounded-xl transition-colors ${
+                        p.hasVariants
+                          ? 'bg-brand-soft text-brand-ink hover:bg-brand hover:text-white'
+                          : 'bg-[#F5F5F7] text-gray-600 hover:bg-black hover:text-white'
+                      }`}
+                    >
+                      <Layers size={16} />
+                    </button>
                     {/* NÚT EDIT */}
                     <button onClick={() => openEditModal(p)} className="p-3 bg-[#F5F5F7] text-gray-600 hover:bg-black hover:text-white rounded-xl transition-colors">
                       <Edit3 size={16} />
                     </button>
                     {/* NÚT XÓA */}
-                    <button onClick={() => handleDelete(p.id)} className="p-3 bg-red-50 text-red-500 hover:bg-[#E30000] hover:text-white rounded-xl transition-colors">
+                    <button onClick={() => handleDelete(p.id)} className="p-3 bg-state-danger-soft text-state-danger hover:bg-state-danger hover:text-white rounded-xl transition-colors">
                       <Trash2 size={16} />
                     </button>
                   </td>
@@ -237,7 +257,7 @@ const AdminProducts = () => {
                   </div>
                   <div className="flex-1 bg-[#F5F5F7] rounded-3xl border-2 border-dashed border-gray-300 flex flex-col items-center justify-center p-4 relative overflow-hidden min-h-[200px]">
                     {formData.imageUrl ? (
-                      <img src={formData.imageUrl} alt="Preview" className="max-w-full max-h-full object-contain brightness-[1.02] contrast-[1.05]" style={{ imageRendering: 'webkit-optimize-contrast' as any }} onError={(e) => { (e.target as any).src = 'https://placehold.co/400x400?text=Invalid+Image'; }} />
+                      <img src={formData.imageUrl} alt="Preview" className="max-w-full max-h-full object-contain brightness-[1.02] contrast-[1.05]" onError={(e) => { e.currentTarget.src = 'https://placehold.co/400x400?text=Invalid+Image'; }} />
                     ) : (
                       <div className="text-center text-gray-400">
                         <ImageIcon size={48} className="mx-auto mb-2 opacity-50" />
@@ -257,6 +277,18 @@ const AdminProducts = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {managingVariants && (
+        <VariantManager
+          productId={managingVariants.id}
+          productName={managingVariants.name}
+          basePrice={managingVariants.price}
+          onClose={() => setManagingVariants(null)}
+          // Variants change the product's reported price and stock, so the
+          // table behind the modal has to be refetched.
+          onChanged={fetchData}
+        />
       )}
     </div>
   );

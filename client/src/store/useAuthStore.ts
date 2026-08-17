@@ -1,21 +1,36 @@
 import { create } from 'zustand';
 import axiosClient from '../api/axiosClient';
 import { useCartStore } from './useCartStore';
+import { useWishlistStore } from './useWishlistStore';
+import type { AuthResponse } from '../types/api';
+
+/** The subset of the user the API returns on login/register. */
+export type AuthUser = AuthResponse['user'];
 
 interface AuthState {
-  user: any | null;
+  user: AuthUser | null;
   isAuthenticated: boolean;
-  login: (user: any, accessToken: string, refreshToken: string) => void;
+  login: (user: AuthUser, accessToken: string) => void;
   logout: () => Promise<void>;
 }
 
+/** localStorage holds a string; anything could be in there, so parse defensively. */
+const readStoredUser = (): AuthUser | null => {
+  try {
+    return JSON.parse(localStorage.getItem('user') || 'null') as AuthUser | null;
+  } catch {
+    return null;
+  }
+};
+
 export const useAuthStore = create<AuthState>((set) => ({
-  user: JSON.parse(localStorage.getItem('user') || 'null'),
+  user: readStoredUser(),
   isAuthenticated: !!localStorage.getItem('accessToken'),
 
-  login: (user, accessToken, refreshToken) => {
+  // Chỉ access token (sống 15 phút) nằm ở localStorage. Refresh token do server
+  // set bằng cookie httpOnly nên JavaScript không đọc được.
+  login: (user, accessToken) => {
     localStorage.setItem('accessToken', accessToken);
-    localStorage.setItem('refreshToken', refreshToken); // Lưu thêm Refresh Token
     localStorage.setItem('user', JSON.stringify(user));
     set({ user, isAuthenticated: true });
   },
@@ -27,14 +42,14 @@ export const useAuthStore = create<AuthState>((set) => ({
     } catch (error) {
       console.error('Logout failed on server', error);
     } finally {
-      // Xóa mọi thứ ở Frontend
+      // Xóa mọi thứ ở Frontend (cookie refresh token do server tự xóa)
       localStorage.removeItem('accessToken');
-      localStorage.removeItem('refreshToken');
       localStorage.removeItem('user');
       set({ user: null, isAuthenticated: false });
-      
-      // Xóa luôn số lượng giỏ hàng trên Navbar
-      useCartStore.setState({ cart: null, totalItems: 0 }); 
+
+      // Xóa luôn số lượng giỏ hàng và wishlist trên Navbar
+      useCartStore.setState({ cart: null, totalItems: 0 });
+      useWishlistStore.getState().clear();
     }
   },
 }));

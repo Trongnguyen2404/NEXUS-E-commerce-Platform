@@ -4,6 +4,7 @@ import { CartResponseDto } from '@/modules/cart/dto/cart-response.dto';
 import { AddToCartDto } from '@/modules/cart/dto/add-to-cart.dto';
 import { UpdateCartItemDto } from '@/modules/cart/dto/update-cart-item.dto';
 import { CartItemResponseDto } from '@/modules/cart/dto/cart-item-response.dto';
+import { ProductVariant } from '@prisma/client';
 
 @Injectable()
 export class CartService {
@@ -23,7 +24,7 @@ export class CartService {
         userId: string,
         addToCartDto: AddToCartDto,
     ): Promise<CartResponseDto> {
-        const { productId, quantity } = addToCartDto;
+        const { productId, quantity, variantId } = addToCartDto;
 
         const product = await this.prisma.product.findUnique({
             where: { id: productId },
@@ -32,18 +33,42 @@ export class CartService {
         if (!product) throw new NotFoundException('Product not found');
         if (!product.isActive)
             throw new BadRequestException('Product is not available');
-        if (product.stock < quantity)
+
+        // Stock lives on the variant for products that have them.
+        let variant: ProductVariant | null = null;
+
+        if (product.hasVariants) {
+            if (!variantId) {
+                throw new BadRequestException(`Choose an option for ${product.name} first`);
+            }
+            variant = await this.prisma.productVariant.findFirst({
+                where: { id: variantId, productId },
+            });
+            if (!variant) throw new NotFoundException('That option is not available');
+            if (!variant.isActive)
+                throw new BadRequestException(`${product.name} (${variant.label}) is not available`);
+        } else if (variantId) {
+            throw new BadRequestException(`${product.name} does not have options to choose from`);
+        }
+
+        const availableStock = variant ? variant.stock : product.stock;
+        if (availableStock < quantity)
             throw new BadRequestException(
-                `Insufficient stock. Available: ${product.stock}`,
+                `Insufficient stock. Available: ${availableStock}`,
             );
 
         const cart = await this.getOrCreateActiveCart(userId);
 
+        // "" rather than null: the unique index needs a non-null value, since
+        // Postgres would treat two NULLs as different rows.
+        const variantKey = variant?.id ?? '';
+
         const existingItem = await this.prisma.cartItem.findUnique({
             where: {
-                cartId_productId: {
+                cartId_productId_variantKey: {
                     cartId: cart.id,
                     productId,
+                    variantKey,
                 },
             },
         });
@@ -51,9 +76,9 @@ export class CartService {
         if (existingItem) {
             const newQuantity = existingItem.quantity + quantity;
 
-            if (product.stock < newQuantity) {
+            if (availableStock < newQuantity) {
                 throw new BadRequestException(
-                    `Insufficient stock. Available: ${product.stock}, Current in cart: ${existingItem.quantity}`,
+                    `Insufficient stock. Available: ${availableStock}, Current in cart: ${existingItem.quantity}`,
                 );
             }
 
@@ -66,6 +91,8 @@ export class CartService {
                 data: {
                     cartId: cart.id,
                     productId,
+                    variantId: variant?.id ?? null,
+                    variantKey,
                     quantity,
                 },
             });
@@ -89,15 +116,21 @@ export class CartService {
             include: {
                 cart: true,
                 product: true,
+                variant: true,
             },
         });
 
         if (!cartItem || cartItem.cart.userId !== userId)
             throw new NotFoundException('Cart item not found');
 
-        if (cartItem.product.stock < quantity) {
+        // Check against whichever row actually holds the stock for this line.
+        const availableStock = cartItem.variant
+            ? cartItem.variant.stock
+            : cartItem.product.stock;
+
+        if (availableStock < quantity) {
             throw new BadRequestException(
-                `Insufficient stock. Available: ${cartItem.product.stock}`,
+                `Insufficient stock. Available: ${availableStock}`,
             );
         }
 
@@ -181,22 +214,33 @@ export class CartService {
      */
     private formatCart(cart: any): CartResponseDto {
         const cartItems: CartItemResponseDto[] = cart.cartItems.map(
-            (item: any) => ({
-                id: item.id,
-                cartId: item.cartId,
-                productId: item.productId,
-                quantity: item.quantity,
-                product: {
-                    ...item.product,
-                    price: Number(item.product.price),
-                },
-                createdAt: item.createdAt,
-                updatedAt: item.updatedAt,
-            }),
+            (item: any) => {
+                // A variant may override the price; one without its own price
+                // inherits the product's. Getting this wrong would show a cart
+                // total that does not match what checkout charges.
+                const unitPrice = Number(item.variant?.price ?? item.product.price);
+
+                return {
+                    id: item.id,
+                    cartId: item.cartId,
+                    productId: item.productId,
+                    variantId: item.variantId ?? null,
+                    variantLabel: item.variant?.label ?? null,
+                    quantity: item.quantity,
+                    unitPrice,
+                    availableStock: item.variant ? item.variant.stock : item.product.stock,
+                    product: {
+                        ...item.product,
+                        price: Number(item.product.price),
+                    },
+                    createdAt: item.createdAt,
+                    updatedAt: item.updatedAt,
+                };
+            },
         );
 
         const totalPrice = cartItems.reduce(
-            (sum, item) => sum + item.product.price * item.quantity,
+            (sum, item) => sum + item.unitPrice * item.quantity,
             0,
         );
 
@@ -220,7 +264,7 @@ export class CartService {
         let cart = await this.prisma.cart.findFirst({
             where: { userId, checkedOut: false },
             include: {
-                cartItems: { include: { product: true } },
+                cartItems: { include: { product: true, variant: true } },
             },
         });
 
@@ -228,7 +272,7 @@ export class CartService {
             cart = await this.prisma.cart.create({
                 data: { userId },
                 include: {
-                    cartItems: { include: { product: true } },
+                    cartItems: { include: { product: true, variant: true } },
                 },
             });
         }

@@ -2,13 +2,30 @@ import { BadRequestException, ConflictException, Injectable, NotFoundException }
 import { PrismaService } from '@/prisma/prisma.service';
 import { CreateProductDto } from '@/modules/products/dto/create-product.dto';
 import { ProductResponseDto } from '@/modules/products/dto/product-response.dto';
-import { Category, Prisma, Product } from '@prisma/client';
-import { QueryProductDto } from '@/modules/products/dto/query-product.dto';
+import { Category, Prisma, Product, ProductVariant } from "@prisma/client";
+import { QueryProductDto, ProductSort } from '@/modules/products/dto/query-product.dto';
 import { UpdateProductDto } from '@/modules/products/dto/update-product.dto';
+import { ReviewsService } from '@/modules/reviews/reviews.service';
 
 @Injectable()
 export class ProductsService {
-    constructor(private prisma: PrismaService) { }
+    constructor(
+        private prisma: PrismaService,
+        private reviewsService: ReviewsService,
+    ) { }
+
+    /** Attaches review scores to a page of products in one extra query. */
+    private async withRatings(
+        products: (Product & { category: Category; variants: ProductVariant[] })[],
+    ): Promise<ProductResponseDto[]> {
+        const ratings = await this.reviewsService.summariseMany(
+            products.map((product) => product.id),
+        );
+
+        return products.map((product) =>
+            this.formatProduct(product, ratings.get(product.id)),
+        );
+    }
 
     // Create product
     async create(
@@ -30,6 +47,7 @@ export class ProductsService {
             },
             include: {
                 category: true,
+                variants: true,
             },
         });
 
@@ -44,14 +62,28 @@ export class ProductsService {
             page: number;
             limit: number;
             totalPages: number;
+            /** Cheapest and dearest product matching everything EXCEPT the price
+             *  filter, so a price slider keeps stable bounds while being dragged. */
+            priceRange: { min: number; max: number };
         };
     }> {
-        const { category, isActive, search, page = 1, limit = 10 } = queryDto;
+        const {
+            category,
+            isActive,
+            search,
+            minPrice,
+            maxPrice,
+            inStock,
+            sort = 'newest',
+            page = 1,
+            limit = 10,
+        } = queryDto;
 
-        const where: Prisma.ProductWhereInput = {};
+        // Everything except price. Reused for the price-range aggregate below.
+        const baseWhere: Prisma.ProductWhereInput = {};
 
         if (category) {
-            where.category = {
+            baseWhere.category = {
                 OR: [
                     {
                         id: category
@@ -73,37 +105,87 @@ export class ProductsService {
         }
 
         if (isActive !== undefined) {
-            where.isActive = isActive;
+            baseWhere.isActive = isActive;
         }
 
         if (search) {
-            where.OR = [
+            baseWhere.OR = [
                 { name: { contains: search, mode: 'insensitive' } },
                 { description: { contains: search, mode: 'insensitive' } },
             ];
         }
 
-        const total = await this.prisma.product.count({ where });
+        if (inStock) {
+            baseWhere.stock = { gt: 0 };
+        }
 
-        const products = await this.prisma.product.findMany({
-            where,
-            skip: (page - 1) * limit,
-            take: limit,
-            orderBy: { createdAt: 'desc' },
-            include: {
-                category: true,
-            },
-        });
+        const where: Prisma.ProductWhereInput = { ...baseWhere };
+
+        if (minPrice !== undefined || maxPrice !== undefined) {
+            where.price = {
+                ...(minPrice !== undefined ? { gte: minPrice } : {}),
+                ...(maxPrice !== undefined ? { lte: maxPrice } : {}),
+            };
+        }
+
+        const [total, products, bounds] = await Promise.all([
+            this.prisma.product.count({ where }),
+            this.prisma.product.findMany({
+                where,
+                skip: (page - 1) * limit,
+                take: limit,
+                orderBy: this.buildOrderBy(sort),
+                include: {
+                    category: true,
+                    variants: true,
+                },
+            }),
+            this.prisma.product.aggregate({
+                where: baseWhere,
+                _min: { price: true },
+                _max: { price: true },
+            }),
+        ]);
 
         return {
-            data: products.map((product) => this.formatProduct(product)),
+            data: await this.withRatings(products),
             meta: {
                 total,
                 page,
                 limit,
                 totalPages: Math.ceil(total / limit),
+                priceRange: {
+                    min: Number(bounds._min.price ?? 0),
+                    max: Number(bounds._max.price ?? 0),
+                },
             },
         };
+    }
+
+    /**
+     * `popular` sorts by review count, which Prisma can do natively on a
+     * relation. Sorting by AVERAGE rating is deliberately absent: Prisma cannot
+     * order by an aggregate of a relation, and faking it in memory would break
+     * pagination. That needs a denormalised column on Product first.
+     */
+    private buildOrderBy(sort: ProductSort): Prisma.ProductOrderByWithRelationInput {
+        switch (sort) {
+            case 'oldest':
+                return { createdAt: 'asc' };
+            case 'price_asc':
+                return { price: 'asc' };
+            case 'price_desc':
+                return { price: 'desc' };
+            case 'name_asc':
+                return { name: 'asc' };
+            case 'name_desc':
+                return { name: 'desc' };
+            case 'popular':
+                return { reviews: { _count: 'desc' } };
+            case 'newest':
+            default:
+                return { createdAt: 'desc' };
+        }
     }
 
     // Get product by id
@@ -112,13 +194,14 @@ export class ProductsService {
             where: { id },
             include: {
                 category: true,
+                variants: true,
             },
         });
         if (!product) {
             throw new NotFoundException('Product not found');
         }
 
-        return this.formatProduct(product);
+        return (await this.withRatings([product]))[0];
     }
 
     // Update product
@@ -156,10 +239,11 @@ export class ProductsService {
             data: updateData,
             include: {
                 category: true,
+                variants: true,
             },
         });
 
-        return this.formatProduct(updatedProduct);
+        return (await this.withRatings([updatedProduct]))[0];
     }
 
     // Update product stock
@@ -197,10 +281,10 @@ export class ProductsService {
 
         const updatedProduct = await this.prisma.product.findUnique({
             where: { id },
-            include: { category: true },
+            include: { category: true, variants: true },
         });
 
-        return this.formatProduct(updatedProduct!);
+        return (await this.withRatings([updatedProduct!]))[0];
     }
 
     // Remove a product
@@ -231,12 +315,41 @@ export class ProductsService {
     }
 
     private formatProduct(
-        product: Product & { category: Category },
+        product: Product & { category: Category; variants?: ProductVariant[] },
+        rating?: { average: number; total: number },
     ): ProductResponseDto {
+        const variants = product.variants ?? [];
+        const activeVariants = variants.filter((variant) => variant.isActive);
+
         return {
             ...product,
-            price: Number(product.price),
+            // For a variant product the headline figures are derived: the price
+            // shown is the cheapest option ("from $X"), and stock is what is
+            // actually buyable across the active options. The product's own
+            // columns are stale once variants exist.
+            price: product.hasVariants && activeVariants.length > 0
+                ? Math.min(...activeVariants.map((v) => Number(v.price ?? product.price)))
+                : Number(product.price),
+            stock: product.hasVariants
+                ? activeVariants.reduce((sum, v) => sum + v.stock, 0)
+                : product.stock,
+            hasVariants: product.hasVariants,
+            variants: variants.map((variant) => ({
+                id: variant.id,
+                productId: variant.productId,
+                sku: variant.sku,
+                options: variant.options as Record<string, string>,
+                label: variant.label,
+                price: Number(variant.price ?? product.price),
+                stock: variant.stock,
+                imageUrl: variant.imageUrl,
+                isActive: variant.isActive,
+            })),
             category: product.category.name,
+            // Zero rather than null so the client can render stars without a
+            // null check on every card.
+            rating: rating?.average ?? 0,
+            reviewCount: rating?.total ?? 0,
         };
     }
 }

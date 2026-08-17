@@ -13,6 +13,14 @@ class OrderItemDto {
     @IsNumber()
     quantity: number;
 
+    @ApiProperty({
+        required: false,
+        description: 'Required when the product sells in variants.',
+    })
+    @IsOptional()
+    @IsString()
+    variantId?: string;
+
     // @ApiProperty({
     //     example: 49.99,
     // })
@@ -32,8 +40,28 @@ export class CreateOrderDto {
     @Type(() => OrderItemDto)
     items: OrderItemDto[];
 
-    @ApiProperty({ required: false })
+    @ApiProperty({
+        required: false,
+        description: 'Free-text address. Ignored when addressId is supplied.',
+    })
     @IsOptional()
     @IsString()
-    shippingAddress: string;
+    shippingAddress?: string;
+
+    @ApiProperty({
+        required: false,
+        description: 'Id of a saved address belonging to the caller. Takes precedence over shippingAddress.',
+    })
+    @IsOptional()
+    @IsString()
+    addressId?: string;
+
+    @ApiProperty({
+        required: false,
+        description: 'Promo code. The discount is recalculated server-side; nothing about the price is taken from the client.',
+        example: 'WELCOME10',
+    })
+    @IsOptional()
+    @IsString()
+    couponCode?: string;
 }

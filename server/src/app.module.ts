@@ -14,6 +14,14 @@ import { PaymentsModule } from '@/modules/payments/payments.module';
 import { APP_GUARD } from '@nestjs/core';
 import { ScheduleModule } from '@nestjs/schedule';
 import { ContactsModule } from './modules/contacts/contacts.module';
+import { HealthModule } from '@/modules/health/health.module';
+import { MailModule } from '@/modules/mail/mail.module';
+import { ReviewsModule } from '@/modules/reviews/reviews.module';
+import { WishlistModule } from '@/modules/wishlist/wishlist.module';
+import { DashboardModule } from '@/modules/dashboard/dashboard.module';
+import { PricingModule } from '@/modules/pricing/pricing.module';
+import { AddressesModule } from '@/modules/addresses/addresses.module';
+import { CouponsModule } from '@/modules/coupons/coupons.module';
 
 @Module({
   imports: [
@@ -24,12 +32,17 @@ import { ContactsModule } from './modules/contacts/contacts.module';
     }), 
     ThrottlerModule.forRoot([
       {
-        ttl: 60, // seconds
-        limit: 10, // 10 requests per 60 seconds
+        // NOTE: ttl is in MILLISECONDS since @nestjs/throttler v5.
+        ttl: 60_000,
+        limit: 100, // 100 requests per minute per IP, across all routes
       },
     ]),
-    PrismaModule,  
-    AuthModule, UsersModule, CategoryModule, ProductsModule, OrdersModule, CartModule, PaymentsModule, ContactsModule
+    PrismaModule,
+    MailModule,
+    PricingModule,
+    HealthModule,
+    AuthModule, UsersModule, CategoryModule, ProductsModule, OrdersModule, CartModule, PaymentsModule, ContactsModule,
+    ReviewsModule, WishlistModule, DashboardModule, AddressesModule, CouponsModule
   ],
   controllers: [AppController],
   providers: [

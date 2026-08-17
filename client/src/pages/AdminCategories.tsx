@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
 import { Loader2, Plus, Trash2, Edit3, X, Image as ImageIcon, Layers } from 'lucide-react';
 import { toast } from 'react-toastify';
-import axiosClient from '../api/axiosClient';
+import axiosClient, { getErrorMessage } from '../api/axiosClient';
+import type { Category, PageResponse } from '../types/api';
 
 const AdminCategories = () => {
-  const [categories, setCategories] = useState<any[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -15,10 +16,10 @@ const AdminCategories = () => {
 
   const fetchData = async () => {
     try {
-      const res: any = await axiosClient.get('/categories');
-      setCategories(Array.isArray(res?.data) ? res.data : (res || []));
-    } catch (e: any) {
-      toast.error('Error loading categories');
+      const res = await axiosClient.get<PageResponse<Category>>('/categories');
+      setCategories(Array.isArray(res?.data) ? res.data : []);
+    } catch (e) {
+      toast.error(getErrorMessage(e, 'Error loading categories'));
     } finally {
       setIsLoading(false);
     }
@@ -32,13 +33,12 @@ const AdminCategories = () => {
       await axiosClient.delete(`/categories/${id}`);
       toast.success('Category deleted');
       fetchData();
-    } catch (e: any) {
-      const msg = Array.isArray(e.message) ? e.message[0] : (e.message || 'Cannot delete category containing products.');
-      toast.error(msg);
+    } catch (e) {
+      toast.error(getErrorMessage(e, 'Cannot delete category containing products.'));
     }
   };
 
-  const openEditModal = (cat: any) => {
+  const openEditModal = (cat: Category) => {
     setEditingId(cat.id);
     setFormData({ name: cat.name || '', description: cat.description || '', imageUrl: cat.imageUrl || '' });
     setIsModalOpen(true);
@@ -63,8 +63,8 @@ const AdminCategories = () => {
       }
       setIsModalOpen(false);
       fetchData();
-    } catch (err: any) {
-      toast.error(err.message || 'Action failed');
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Action failed'));
     } finally {
       setIsSubmitting(false);
     }
@@ -103,7 +103,7 @@ const AdminCategories = () => {
                   <td className="py-5 px-4 flex items-center space-x-5">
                     <div className="w-16 h-16 bg-[#F5F5F7] rounded-2xl flex items-center justify-center p-2 border border-gray-200 shrink-0">
                       {cat.imageUrl ? (
-                        <img src={cat.imageUrl} className="max-w-full max-h-full object-contain brightness-[1.02] contrast-[1.05]" style={{ imageRendering: 'webkit-optimize-contrast' as any }} />
+                        <img src={cat.imageUrl} className="max-w-full max-h-full object-contain brightness-[1.02] contrast-[1.05]" />
                       ) : <Layers className="text-gray-300" size={24} />}
                     </div>
                     <div>
@@ -118,7 +118,7 @@ const AdminCategories = () => {
                     <button onClick={() => openEditModal(cat)} className="p-3 bg-[#F5F5F7] text-gray-600 hover:bg-black hover:text-white rounded-xl transition-colors">
                       <Edit3 size={16} />
                     </button>
-                    <button onClick={() => handleDelete(cat.id)} className="p-3 bg-red-50 text-red-500 hover:bg-[#E30000] hover:text-white rounded-xl transition-colors">
+                    <button onClick={() => handleDelete(cat.id)} className="p-3 bg-state-danger-soft text-state-danger hover:bg-state-danger hover:text-white rounded-xl transition-colors">
                       <Trash2 size={16} />
                     </button>
                   </td>
@@ -169,7 +169,7 @@ const AdminCategories = () => {
                   {/* Khu vực hiện ảnh */}
                   <div className="flex-1 bg-[#F5F5F7] rounded-3xl border-2 border-dashed border-gray-300 flex flex-col items-center justify-center p-4 relative overflow-hidden min-h-[200px]">
                     {formData.imageUrl ? (
-                      <img src={formData.imageUrl} alt="Preview" className="max-w-full max-h-full object-contain brightness-[1.02] contrast-[1.05]" style={{ imageRendering: 'webkit-optimize-contrast' as any }} onError={(e) => { (e.target as any).src = 'https://placehold.co/400x400?text=Invalid+Image'; }} />
+                      <img src={formData.imageUrl} alt="Preview" className="max-w-full max-h-full object-contain brightness-[1.02] contrast-[1.05]" onError={(e) => { e.currentTarget.src = 'https://placehold.co/400x400?text=Invalid+Image'; }} />
                     ) : (
                       <div className="text-center text-gray-400">
                         <ImageIcon size={48} className="mx-auto mb-2 opacity-50" />

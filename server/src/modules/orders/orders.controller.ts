@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { ApiBadRequestResponse, ApiBearerAuth, ApiBody, ApiCreatedResponse, ApiForbiddenResponse, ApiNotFoundResponse, ApiOkResponse, ApiOperation, ApiParam, ApiQuery, ApiResponse, ApiTags, ApiTooManyRequestsResponse, getSchemaPath } from '@nestjs/swagger';
 import { JwtAuthGuard } from '@/common/guards/jwt-auth.guard';
 import { RolesGuard } from '@/common/guards/roles.guard';
@@ -10,14 +10,20 @@ import { Roles } from '@/common/decorators/roles.decorator';
 import { Role } from '@prisma/client';
 import { QueryOrderDto } from '@/modules/orders/dto/query-order.dto';
 import { UpdateOrderDto } from '@/modules/orders/dto/update-order.dto';
+import { UpdateOrderUserDto } from '@/modules/orders/dto/update-order-user.dto';
 import { ModerateThrottle, RelaxedThrottle } from '@/common/decorators/custom-throttler.decorator';
+import { QuoteOrderDto } from '@/modules/orders/dto/quote-order.dto';
+import { PricingService } from '@/modules/pricing/pricing.service';
 
 @ApiTags('orders')
 @ApiBearerAuth('JWT-auth')
 @Controller('orders')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class OrdersController {
-  constructor(private readonly ordersService: OrdersService) {}
+  constructor(
+    private readonly ordersService: OrdersService,
+    private readonly pricingService: PricingService,
+  ) {}
 
   // Create orders
   @Post()
@@ -46,6 +52,24 @@ export class OrdersController {
     @GetUser('id') userId: string,
   ) {
     return await this.ordersService.create(userId, createOrderDto);
+  }
+
+  // Price preview
+  @Post('quote')
+  @HttpCode(HttpStatus.OK)
+  @ModerateThrottle()
+  @ApiOperation({
+    summary: 'Price a basket without placing an order',
+    description:
+      'Returns the same breakdown the order would get — subtotal, discount, shipping, tax — computed by the same code that charges. Lets checkout show a promo code taking effect before committing.',
+  })
+  @ApiBody({ type: QuoteOrderDto })
+  @ApiOkResponse({ description: 'Priced basket' })
+  @ApiBadRequestResponse({
+    description: 'Empty basket, insufficient stock, or an invalid promo code',
+  })
+  async quote(@Body() quoteOrderDto: QuoteOrderDto) {
+    return await this.pricingService.quote(quoteOrderDto.items, quoteOrderDto.couponCode);
   }
 
   // Get all orders
@@ -180,31 +204,36 @@ export class OrdersController {
     return await this.ordersService.update(id, dto);
   }
 
-  // User: update own order
+  // User: update own order (shipping address only — status is ADMIN-only)
   @Patch(':id')
   @ModerateThrottle()
   @ApiOperation({
     summary: 'Update your own order',
+    description:
+      'Correct the shipping address of your own order while it is still PENDING. Order status cannot be changed here.',
   })
   @ApiParam({
     name: 'id',
     description: 'Order ID',
   })
   @ApiBody({
-    type: UpdateOrderDto,
+    type: UpdateOrderUserDto,
   })
   @ApiOkResponse({
     description: 'Order updated successfully',
+  })
+  @ApiBadRequestResponse({
+    description: 'Order is no longer pending, or unknown field submitted',
   })
   @ApiNotFoundResponse({
     description: 'Order not found',
   })
   async update(
     @Param('id') id: string,
-    @Body() dto: UpdateOrderDto,
+    @Body() dto: UpdateOrderUserDto,
     @GetUser('id') userId: string,
   ) {
-    return await this.ordersService.update(id, dto, userId);
+    return await this.ordersService.updateOwn(id, userId, dto);
   }
 
   //Admin : Cancel an order

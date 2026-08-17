@@ -2,16 +2,17 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Loader2, ArrowRight } from 'lucide-react';
 import axiosClient from '../api/axiosClient';
+import type { Category, PageResponse } from '../types/api';
 
 const Categories = () => {
-  const [categories, setCategories] = useState<any[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const navigate = useNavigate();
 
   useEffect(() => {
     const fetchCategories = async () => {
       try {
-        const response: any = await axiosClient.get('/categories');
+        const response = await axiosClient.get<PageResponse<Category>>('/categories');
         setCategories(response.data || []);
       } catch (error) {
         console.error('Failed to fetch categories:', error);
@@ -31,7 +32,7 @@ const Categories = () => {
   }
 
   return (
-    <div className="min-h-screen bg-white pb-24">
+    <div className="min-h-screen bg-white pb-16">
       <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 pt-16">
         
         <div className="mb-16 text-center max-w-2xl mx-auto">

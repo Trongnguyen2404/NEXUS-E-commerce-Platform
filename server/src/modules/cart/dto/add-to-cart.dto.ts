@@ -1,5 +1,5 @@
-import { ApiProperty } from '@nestjs/swagger';
-import { IsString, IsNotEmpty, IsNumber, Min } from 'class-validator';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { IsString, IsNotEmpty, IsNumber, IsOptional, Min } from 'class-validator';
 import { Type } from 'class-transformer';
 
 /**
@@ -23,4 +23,13 @@ export class AddToCartDto {
   @Min(1)
   @Type(() => Number)
   quantity: number;
+
+  @ApiPropertyOptional({
+    description:
+      'Which variant to add. Required when the product sells in variants, rejected when it does not.',
+    example: '550e8400-e29b-41d4-a716-446655440001',
+  })
+  @IsOptional()
+  @IsString()
+  variantId?: string;
 }

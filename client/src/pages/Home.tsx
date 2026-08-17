@@ -2,11 +2,13 @@ import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ArrowRight, Loader2, ShieldCheck, Zap, Globe } from 'lucide-react';
 import axiosClient from '../api/axiosClient';
+import { PRODUCT_PLACEHOLDER } from '../components/productPlaceholder';
+import type { Category, PageResponse, PaginatedResponse, Product } from '../types/api';
 
 const Home = () => {
   const navigate = useNavigate();
-  const [categories, setCategories] = useState<any[]>([]);
-  const [featuredProducts, setFeaturedProducts] = useState<any[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [featuredProducts, setFeaturedProducts] = useState<Product[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -15,12 +17,12 @@ const Home = () => {
       try {
         // Fetch both Categories and Products concurrently from your Backend
         const [catRes, prodRes] = await Promise.all([
-          axiosClient.get('/categories', { params: { limit: 4 } }),
-          axiosClient.get('/products', { params: { limit: 4 } })
+          axiosClient.get<PageResponse<Category>>('/categories', { params: { limit: 4 } }),
+          axiosClient.get<PaginatedResponse<Product>>('/products', { params: { limit: 4 } })
         ]);
-        
-        setCategories((catRes as any).data || []);
-        setFeaturedProducts((prodRes as any).data || []);
+
+        setCategories(catRes.data || []);
+        setFeaturedProducts(prodRes.data || []);
       } catch (error) {
         console.error('Failed to fetch home data:', error);
       } finally {
@@ -54,7 +56,7 @@ const Home = () => {
               <p className="text-lg text-gray-600 max-w-md font-medium leading-relaxed">
                 Discover premium performance gear engineered for professionals and enthusiasts. Uncompromising quality meets minimalist design.
               </p>
-              <Link to="/products" className="inline-flex items-center space-x-3 bg-blue-600 text-white px-8 py-4 rounded-xl font-bold uppercase tracking-widest text-sm hover:bg-blue-700 transition-all shadow-lg shadow-blue-500/30">
+              <Link to="/products" className="inline-flex items-center space-x-3 bg-brand text-white px-8 py-4 rounded-xl font-bold uppercase tracking-widest text-sm hover:bg-brand-ink transition-all shadow-lg shadow-brand/30">
                 <span>Shop Now</span>
                 <ArrowRight size={18} />
               </Link>
@@ -144,24 +146,27 @@ const Home = () => {
               </Link>
             </div>
             
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-x-8 gap-y-12">
+            {/* Same bounded card as the Products grid — one card shape across
+                the whole storefront. */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
               {featuredProducts.map((p) => (
-                <div 
-                  key={p.id} 
+                <div
+                  key={p.id}
                   onClick={() => navigate(`/products/${p.id}`)}
-                  className="group cursor-pointer flex flex-col"
+                  className="group cursor-pointer flex flex-col bg-white border border-gray-200 rounded-3xl overflow-hidden hover:border-gray-400 hover:shadow-lg transition-all"
                 >
-                  <div className="aspect-square bg-white rounded-2xl mb-5 flex items-center justify-center p-8 overflow-hidden border border-gray-200 group-hover:border-black transition-colors">
-                    <img 
-                      src={p.imageUrl || 'https://via.placeholder.com/400?text=Gear'} 
-                      className="w-full h-full object-contain mix-blend-multiply group-hover:scale-110 transition-transform duration-700 ease-out" 
-                      alt={p.name} 
+                  <div className="aspect-square bg-surface-muted flex items-center justify-center p-6 overflow-hidden">
+                    <img
+                      src={p.imageUrl || PRODUCT_PLACEHOLDER}
+                      onError={(e) => { e.currentTarget.src = PRODUCT_PLACEHOLDER; }}
+                      className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-700 ease-out"
+                      alt={p.name}
                     />
                   </div>
-                  <div className="flex flex-col flex-1">
-                    <p className="text-[10px] font-bold text-blue-600 uppercase tracking-[0.15em] mb-1.5">{p.category}</p>
-                    <h3 className="text-base font-bold text-black leading-snug mb-2 pr-4 truncate">{p.name}</h3>
-                    <p className="text-lg font-medium text-gray-600 mt-auto">${Number(p.price).toFixed(2)}</p>
+                  <div className="flex flex-col flex-1 p-5 border-t border-gray-100">
+                    <p className="text-[10px] font-bold text-brand-ink uppercase tracking-[0.15em] mb-1.5">{p.category}</p>
+                    <h3 className="text-base font-bold text-black leading-snug mb-2 truncate">{p.name}</h3>
+                    <p className="text-lg font-black text-black mt-auto pt-2">${Number(p.price).toFixed(2)}</p>
                   </div>
                 </div>
               ))}

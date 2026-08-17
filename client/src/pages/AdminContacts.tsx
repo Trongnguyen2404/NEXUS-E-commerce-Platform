@@ -2,25 +2,10 @@ import { useEffect, useState, useCallback } from 'react';
 import { Search, Trash2, ChevronLeft, ChevronRight, Loader2, Inbox, X } from 'lucide-react';
 import { toast } from 'react-toastify';
 import axiosClient from '../api/axiosClient';
+import type { Contact, ContactStatus, PaginatedResponse } from '../types/api';
 
 // ── Types ────────────────────────────────────────────────────────────────────
-type ContactStatus = 'PENDING' | 'READ' | 'REPLIED';
-
-interface Contact {
-  id: string;
-  name: string;
-  email: string;
-  subject: string;
-  message: string;
-  status: ContactStatus;
-}
-
-interface Meta {
-  total: number;
-  page: number;
-  limit: number;
-  totalPages: number;
-}
+type Meta = PaginatedResponse<Contact>['meta'];
 
 // ── Config ───────────────────────────────────────────────────────────────────
 const STATUS_CONFIG: Record<ContactStatus, { label: string; cls: string }> = {
@@ -30,7 +15,7 @@ const STATUS_CONFIG: Record<ContactStatus, { label: string; cls: string }> = {
 };
 
 const AVATAR_COLORS = [
-  'bg-violet-500', 'bg-blue-500', 'bg-rose-500',
+  'bg-violet-500', 'bg-brand', 'bg-rose-500',
   'bg-amber-500',  'bg-teal-500', 'bg-pink-500',
 ];
 
@@ -54,11 +39,12 @@ const AdminContacts = () => {
   const fetchContacts = useCallback(async () => {
     setIsLoading(true);
     try {
-      const res: any = await axiosClient.get('/contacts', {
+      // GET /contacts trả { data, meta } — không bọc thêm một lớp nữa.
+      const res = await axiosClient.get<PaginatedResponse<Contact>>('/contacts', {
         params: { search, page, limit: 10 },
       });
-      setContacts(res?.data?.data ?? res?.data ?? []);
-      setMeta(res?.data?.meta ?? res?.meta ?? null);
+      setContacts(res?.data ?? []);
+      setMeta(res?.meta ?? null);
     } catch {
       toast.error('Failed to load contacts');
     } finally {

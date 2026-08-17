@@ -1,20 +1,24 @@
 import { Throttle } from '@nestjs/throttler';
 
-// Strict rate for auth, payments
+// NOTE: `ttl` is in MILLISECONDS since @nestjs/throttler v5. These all use a
+// one-minute window; only the allowance per window differs.
+const ONE_MINUTE = 60_000;
+
+// Strict rate for auth, payments — the endpoints worth brute-forcing.
 export const StrictThrottle = () =>
   Throttle({
     default: {
-      ttl: 1000,
-      limit: 3,
+      ttl: ONE_MINUTE,
+      limit: 5,
     },
   });
 
-// Moderate rate for orders
+// Moderate rate for orders and other state-changing operations
 export const ModerateThrottle = () =>
   Throttle({
     default: {
-      ttl: 1000,
-      limit: 5,
+      ttl: ONE_MINUTE,
+      limit: 20,
     },
   });
 
@@ -22,7 +26,7 @@ export const ModerateThrottle = () =>
 export const RelaxedThrottle = () =>
   Throttle({
     default: {
-      ttl: 1000,
-      limit: 20,
+      ttl: ONE_MINUTE,
+      limit: 60,
     },
   });

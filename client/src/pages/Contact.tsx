@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Mail, MapPin, Phone, Send } from 'lucide-react';
 import { toast } from 'react-toastify';
-import axiosClient from '../api/axiosClient';
+import axiosClient, { getErrorMessage } from '../api/axiosClient';
 
 const Contact = () => {
   const [loading, setLoading] = useState(false);
@@ -25,16 +25,17 @@ const Contact = () => {
 
       toast.success('Your message has been sent successfully!');
       setFormData({ name: '', email: '', subject: '', message: '' });
-    } catch (error: any) {
-      const errorMsg = error.response?.data?.message;
-      toast.error(Array.isArray(errorMsg) ? errorMsg[0] : errorMsg || 'Failed to send message');
+    } catch (error) {
+      // Interceptor đã reject bằng chính body lỗi, nên `error.response` luôn
+      // undefined — đọc kiểu cũ khiến toast lúc nào cũng ra message mặc định.
+      toast.error(getErrorMessage(error, 'Failed to send message'));
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-white pb-24">
+    <div className="min-h-screen bg-white pb-16">
       <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 pt-16">
         
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-20">

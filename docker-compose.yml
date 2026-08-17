@@ -1,0 +1,81 @@
+# Full local stack: database, API and frontend.
+#
+#   cp server/.env.example server/.env   # fill in the Stripe keys at minimum
+#   docker compose up --build
+#
+# API      http://localhost:3000/api/v1
+# Frontend http://localhost:5173
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-nexus}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # One-shot job: applies migrations and seeds the admin account, then exits.
+  # Built from the `build` stage because seeding runs through ts-node, which the
+  # slim runtime image does not carry.
+  migrate:
+    build:
+      context: ./server
+      target: build
+    env_file:
+      - ./server/.env
+    environment:
+      # Inside the compose network the database is reachable by service name,
+      # which overrides whatever localhost URL is in the .env file.
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-nexus}?schema=public
+    command: sh -c "npx prisma migrate deploy && npm run seed"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  server:
+    build:
+      context: ./server
+      target: runtime
+    restart: unless-stopped
+    env_file:
+      - ./server/.env
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-nexus}?schema=public
+      ALLOWED_ORIGINS: http://localhost:5173
+    ports:
+      - "3000:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
+  client:
+    build:
+      context: ./client
+      target: runtime
+      # Vite bakes these into the bundle at build time — they cannot be changed
+      # by restarting the container, only by rebuilding the image.
+      args:
+        VITE_API_URL: http://localhost:3000/api/v1
+        VITE_STRIPE_PUBLIC_KEY: ${VITE_STRIPE_PUBLIC_KEY:-}
+    restart: unless-stopped
+    ports:
+      - "5173:80"
+    depends_on:
+      - server
+
+volumes:
+  postgres_data:

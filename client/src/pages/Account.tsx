@@ -2,21 +2,33 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/useAuthStore';
 import { 
-  User, Mail, LogOut, Loader2, Package, Clock, 
+  User, Mail, LogOut, Loader2, Package,
   Settings, Key, ChevronDown, ChevronUp, Shield, MapPin, XCircle,
   AlertCircle
 } from 'lucide-react';
 import { toast } from 'react-toastify';
-import axiosClient from '../api/axiosClient';
+import axiosClient, { getErrorMessage } from '../api/axiosClient';
+import AddressBook from '../components/AddressBook';
+import type { Order, OrderStatus, PageResponse, User as ApiUser } from '../types/api';
+
+// Same tinted treatment as the admin order table, so one status never wears two
+// different colours depending on which page you are on.
+const ORDER_STATUS_STYLES: Record<OrderStatus, string> = {
+  PENDING: 'bg-state-warning-soft text-state-warning',
+  PROCESSING: 'bg-state-info-soft text-state-info',
+  SHIPPED: 'bg-brand-soft text-brand-ink',
+  DELIVERED: 'bg-state-success-soft text-state-success',
+  CANCELLED: 'bg-state-danger-soft text-state-danger',
+};
 
 const Account = () => {
   const { user, logout } = useAuthStore();
   const navigate = useNavigate();
   
-  const [profile, setProfile] = useState<any>(null);
-  const [orders, setOrders] = useState<any[]>([]);
+  const [profile, setProfile] = useState<ApiUser | null>(null);
+  const [orders, setOrders] = useState<Order[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'orders' | 'settings' | 'security'>('orders');
+  const [activeTab, setActiveTab] = useState<'orders' | 'addresses' | 'settings' | 'security'>('orders');
   const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
 
   const [profileForm, setProfileForm] = useState({ firstName: '', lastName: '' });
@@ -24,24 +36,19 @@ const Account = () => {
   const [isUpdating, setIsUpdating] = useState(false);
 
   // Hàm bóc tách và hiển thị lỗi từ Backend NestJS
-  const showBackendError = (err: any, defaultMessage: string) => {
-    console.error("🔥 Backend Error:", err);
-    if (err && err.message) {
-      const msg = Array.isArray(err.message) ? err.message[0] : err.message;
-      toast.error(msg);
-    } else {
-      toast.error(defaultMessage);
-    }
+  const showBackendError = (err: unknown, defaultMessage: string) => {
+    console.error('Backend error:', err);
+    toast.error(getErrorMessage(err, defaultMessage));
   };
 
   const fetchData = async () => {
     try {
-      const [profileRes, ordersRes]: any = await Promise.all([
-        axiosClient.get('/users/me'),
-        axiosClient.get('/orders')
+      const [profileRes, ordersRes] = await Promise.all([
+        axiosClient.get<ApiUser>('/users/me'),
+        axiosClient.get<PageResponse<Order>>('/orders')
       ]);
       setProfile(profileRes);
-      setOrders(Array.isArray(ordersRes?.data) ? ordersRes.data : (ordersRes || []));
+      setOrders(Array.isArray(ordersRes?.data) ? ordersRes.data : []);
       setProfileForm({ 
         firstName: profileRes?.firstName || '', 
         lastName: profileRes?.lastName || '' 
@@ -67,7 +74,7 @@ const Account = () => {
       await axiosClient.patch('/users/me', profileForm);
       toast.success('Profile updated successfully!');
       fetchData(); 
-    } catch (err: any) {
+    } catch (err) {
       showBackendError(err, 'Failed to update profile');
     } finally {
       setIsUpdating(false);
@@ -81,7 +88,7 @@ const Account = () => {
       await axiosClient.patch('/users/me/password', passwordForm);
       toast.success('Password changed successfully!');
       setPasswordForm({ currentPassword: '', newPassword: '' }); 
-    } catch (err: any) {
+    } catch (err) {
       showBackendError(err, 'Password update failed');
     } finally {
       setIsUpdating(false);
@@ -95,7 +102,7 @@ const Account = () => {
       await axiosClient.delete(`/orders/${orderId}`);
       toast.success("Order cancelled successfully");
       fetchData();
-    } catch (err: any) {
+    } catch (err) {
       showBackendError(err, "Cannot cancel this order");
     }
   };
@@ -115,19 +122,20 @@ const Account = () => {
             <div className="space-y-2">
               <h1 className="text-3xl font-black uppercase tracking-tighter text-black leading-none">Settings</h1>
               <p className="text-gray-400 text-[10px] font-black uppercase tracking-[0.4em]">
-                Member Since {new Date(profile?.createdAt).getFullYear()}
+                Member Since {profile?.createdAt ? new Date(profile.createdAt).getFullYear() : '—'}
               </p>
             </div>
             
             <div className="flex bg-gray-200 p-1.5 rounded-2xl border border-gray-300 shadow-inner">
-              {[
+              {([
                 { id: 'orders', label: 'Orders', icon: Package },
+                { id: 'addresses', label: 'Addresses', icon: MapPin },
                 { id: 'settings', label: 'Profile', icon: Settings },
                 { id: 'security', label: 'Security', icon: Key }
-              ].map((tab) => (
+              ] as const).map((tab) => (
                 <button
                   key={tab.id}
-                  onClick={() => setActiveTab(tab.id as any)}
+                  onClick={() => setActiveTab(tab.id)}
                   className={`flex items-center space-x-2 px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
                     activeTab === tab.id ? 'bg-white text-black shadow-sm' : 'text-gray-400 hover:text-black'
                   }`}
@@ -203,7 +211,7 @@ const Account = () => {
                     </div>
                   ) : (
                     <div className="space-y-6">
-                      {orders.map((order: any) => {
+                      {orders.map((order) => {
                         const isExpanded = expandedOrderId === order.id;
                         return (
                           <div key={order.id} className="group border border-gray-100 rounded-[2rem] overflow-hidden transition-all hover:border-black hover:shadow-xl hover:shadow-black/5">
@@ -219,12 +227,7 @@ const Account = () => {
                                 </div>
                                 <div>
                                   <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Status</p>
-                                  <span className={`text-[9px] font-black uppercase px-3 py-1.5 rounded-lg border-none text-white shadow-sm ${
-                                    order.status === 'PENDING' ? 'bg-[#FF8A00]' : 
-                                    order.status === 'CANCELLED' ? 'bg-[#E30000]' : 
-                                    order.status === 'PROCESSING' ? 'bg-[#007AFF]' :
-                                    'bg-[#28A745]'
-                                  }`}>
+                                  <span className={`text-[9px] font-black uppercase px-3 py-1.5 rounded-lg border-none ${ORDER_STATUS_STYLES[order.status] ?? ORDER_STATUS_STYLES.PENDING}`}>
                                     {order.status}
                                   </span>
                                 </div>
@@ -246,13 +249,18 @@ const Account = () => {
                                     <Package size={12} className="mr-2" /> Shipment Content
                                   </h4>
                                   <div className="space-y-2">
-                                    {order.items?.map((item: any) => (
+                                    {order.items?.map((item) => (
                                       <div key={item.id} className="flex items-center justify-between bg-white p-5 rounded-2xl border border-gray-100 shadow-sm">
                                         <div className="flex items-center space-x-4">
                                           <div className="w-12 h-12 bg-[#F5F5F7] rounded-xl flex items-center justify-center text-[10px] font-black text-black border border-gray-200">
                                             x{item.quantity}
                                           </div>
-                                          <span className="text-xs font-black uppercase text-black tracking-tight">{item.productName}</span>
+                                          <span className="text-xs font-black uppercase text-black tracking-tight">
+                                            {item.productName}
+                                            {item.variantLabel && (
+                                              <span className="text-gray-400 font-bold"> · {item.variantLabel}</span>
+                                            )}
+                                          </span>
                                         </div>
                                         <span className="text-xs font-bold text-gray-500 tracking-tighter">${Number(item.subtotal).toFixed(2)}</span>
                                       </div>
@@ -289,6 +297,16 @@ const Account = () => {
               )}
 
               {/* TAB: SETTINGS */}
+              {activeTab === 'addresses' && (
+                <div>
+                  <h3 className="text-xl font-black uppercase tracking-tight mb-2">Shipping addresses</h3>
+                  <p className="text-xs font-medium text-gray-500 mb-8">
+                    Your default address is preselected at checkout.
+                  </p>
+                  <AddressBook />
+                </div>
+              )}
+
               {activeTab === 'settings' && (
                 <div className="p-8 sm:p-12 animate-in fade-in duration-500">
                   <div className="mb-12">
@@ -341,7 +359,7 @@ const Account = () => {
                   </form>
                   {/* Danger Zone: Xóa tài khoản */}
                   <div className="mt-16 pt-10 border-t border-gray-200">
-                    <h4 className="text-sm font-black uppercase text-[#E30000] tracking-widest mb-2">Danger Zone</h4>
+                    <h4 className="text-sm font-black uppercase text-state-danger tracking-widest mb-2">Danger Zone</h4>
                     <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-6 leading-relaxed">
                       Permanently delete your account and all associated data. This action cannot be undone.
                     </p>
@@ -354,12 +372,12 @@ const Account = () => {
                             toast.success('Account deleted permanently.');
                             await logout();
                             navigate('/');
-                          } catch (err: any) {
+                          } catch (err) {
                             showBackendError(err, 'Failed to delete account');
                           }
                         }
                       }}
-                      className="w-full sm:w-auto px-8 py-4 bg-red-50 text-[#E30000] rounded-xl font-black uppercase text-[10px] tracking-widest hover:bg-[#E30000] hover:text-white transition-all"
+                      className="w-full sm:w-auto px-8 py-4 bg-state-danger-soft text-state-danger rounded-xl font-black uppercase text-[10px] tracking-widest hover:bg-state-danger hover:text-white transition-all"
                     >
                       Delete Account
                     </button>

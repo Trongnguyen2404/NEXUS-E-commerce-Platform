@@ -4,20 +4,15 @@ import { ApiProperty } from "@nestjs/swagger";
 import { Role } from "@prisma/client"
 
 
-export class AuthResponseDto {
+// What the client actually receives. The refresh token is deliberately absent:
+// it is delivered as an httpOnly cookie so no script can read it.
+export class AuthHttpResponseDto {
     @ApiProperty({
         description: 'Access token for authentication',
         example:
         'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c',
     })
     accessToken: string;
-
-    @ApiProperty({
-        description: 'Refresh token for obtaining new access tokens',
-        example:
-            'dGhpcy1pcz1hLXJlZnJlc2gtdG9rZW4tZXhhbXBsZS13aXRoLXN1ZmZpY2lhbC1jaGFyYWN0ZXJzIQ==',
-     })
-     refreshToken: string;
 
     @ApiProperty({
         description: 'Authenticated user information',
@@ -36,4 +31,10 @@ export class AuthResponseDto {
     lastName: string | null;
     role: Role;
     };
+}
+
+// Internal shape returned by AuthService. The controller peels off refreshToken
+// into a cookie and never puts it in the response body.
+export class AuthResponseDto extends AuthHttpResponseDto {
+    refreshToken: string;
 }

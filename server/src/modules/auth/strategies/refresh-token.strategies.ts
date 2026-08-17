@@ -2,44 +2,35 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PassportStrategy } from '@nestjs/passport';
-import { Strategy,ExtractJwt } from 'passport-jwt';
+import { Strategy, ExtractJwt } from 'passport-jwt';
 import { PrismaService } from '@/prisma/prisma.service';
 import { Request } from 'express';
 import * as crypto from 'crypto';
+import { REFRESH_TOKEN_COOKIE } from '@/modules/auth/auth.constants';
+
+// The token lives in an httpOnly cookie, never in a header the browser's
+// JavaScript could set — that is the whole point of moving it off localStorage.
+const fromRefreshCookie = (req: Request): string | null =>
+    req?.cookies?.[REFRESH_TOKEN_COOKIE] ?? null;
 
 @Injectable()
 export class RefreshTokenStrategy extends PassportStrategy(Strategy, 'jwt-refresh') {
-       
-constructor( private configService: ConfigService, private prisma: PrismaService) {
-        // THÊM 2 DÒNG LOG NÀY VÀO ĐỂ SOI:
-        const secret = configService.get<string>('JWT_REFRESH_SECRET');
+
+    constructor(private configService: ConfigService, private prisma: PrismaService) {
         super({
-            jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
+            jwtFromRequest: ExtractJwt.fromExtractors([fromRefreshCookie]),
             ignoreExpiration: false,
-            secretOrKey: secret, // Truyền biến vừa log vào đây
+            secretOrKey: configService.get<string>('JWT_REFRESH_SECRET'),
             passReqToCallback: true,
         });
     }
 
     // Validate the refresh token
     async validate(req: Request, payload: { sub: string, email: string }) {
-        console.log('Validating refresh token for user:', payload.email);
-        console.log('Payload', { sub: payload.sub, email: payload.email });
-        const authHeader = req.headers.authorization;
-
-        if (!authHeader) {
-            console.log('No authorization header found in the request');
-            throw new UnauthorizedException ('Refresh token not provided');
-        }
-
-        const parts = authHeader.split(' ');
-        if (parts.length !== 2 || parts[0] !== 'Bearer') {
-             throw new UnauthorizedException('Invalid authorization header format');
-        }   
-        const refreshToken = parts[1];
+        const refreshToken = fromRefreshCookie(req);
 
         if (!refreshToken) {
-            throw new UnauthorizedException('Refresh token is empty after extraction');
+            throw new UnauthorizedException('Refresh token not provided');
         }
 
         const user = await this.prisma.user.findUnique({
@@ -55,10 +46,16 @@ constructor( private configService: ConfigService, private prisma: PrismaService
         if (!user || !user.refreshToken) {
             throw new UnauthorizedException('Invalid refresh token');
         }
-        const hashedInputToken = crypto.createHash('sha256').update(refreshToken).digest('hex');
 
-        // 2. So sánh 2 chuỗi Hash với nhau
-        const refreshTokenMatches = hashedInputToken === user.refreshToken;
+        const hashedInputToken = crypto.createHash('sha256').update(refreshToken).digest('hex');
+        const storedToken = Buffer.from(user.refreshToken);
+        const inputToken = Buffer.from(hashedInputToken);
+
+        // So sánh 2 chuỗi Hash với nhau. timingSafeEqual throws on a length
+        // mismatch, so that case is ruled out first.
+        const refreshTokenMatches =
+            storedToken.length === inputToken.length &&
+            crypto.timingSafeEqual(inputToken, storedToken);
 
         if (!refreshTokenMatches) {
             throw new UnauthorizedException('Invalid refresh does not match stored token');

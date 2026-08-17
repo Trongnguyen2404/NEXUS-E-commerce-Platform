@@ -42,6 +42,11 @@ enum ContactStatus {
   REPLIED
 }
 
+enum DiscountType {
+  PERCENT
+  FIXED
+}
+
 model User {
   id           String  @id @default(uuid())
   email        String  @unique
@@ -56,11 +61,35 @@ model User {
   carts    Cart[]
   payments Payment[]
 
+  passwordResetTokens PasswordResetToken[]
+  reviews             Review[]
+  wishlistItems       WishlistItem[]
+  addresses           Address[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([email])
   @@map("users") // the name of the table
+}
+
+model PasswordResetToken {
+  id String @id @default(uuid())
+
+  // Only the SHA-256 hash is stored. A leaked database dump must not let anyone
+  // take over accounts by replaying the tokens inside it.
+  tokenHash String   @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([tokenHash])
+  @@map("password_reset_tokens")
 }
 
 model Product {
@@ -74,8 +103,16 @@ model Product {
   isActive    Boolean @default(true)
 
   // Relations
-  orderItems OrderItem[]
-  cartItems  CartItem[]
+  orderItems    OrderItem[]
+  cartItems     CartItem[]
+  reviews       Review[]
+  wishlistItems WishlistItem[]
+  variants      ProductVariant[]
+
+  // True once the product sells in variants. When set, `price` and `stock` above
+  // are ignored in favour of the per-variant values — kept as a column rather
+  // than derived so listings can filter without joining.
+  hasVariants Boolean @default(false)
 
   categoryId String
   category   Category @relation(fields: [categoryId], references: [id])
@@ -117,6 +154,13 @@ model OrderItem {
   productId String
   product   Product @relation(fields: [productId], references: [id])
 
+  variantId String?
+  variant   ProductVariant? @relation(fields: [variantId], references: [id])
+
+  /// Snapshot of the variant label, e.g. "M / Black". Kept alongside productName
+  /// so a past order still reads correctly after the variant is renamed or gone.
+  variantLabel String?
+
   orderId String
   order   Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
 
@@ -134,13 +178,24 @@ model CartItem {
   productId String
   product   Product @relation(fields: [productId], references: [id])
 
+  variantId String?
+  variant   ProductVariant? @relation(fields: [variantId], references: [id], onDelete: Cascade)
+
+  /// The variant id, or "" when the product has none.
+  ///
+  /// Exists only to keep the unique index below honest: Postgres treats NULLs as
+  /// distinct, so a nullable variantId would happily allow the same product to
+  /// be added twice as two separate rows. A non-null sentinel prevents that
+  /// while still letting one product sit in the cart once per variant.
+  variantKey String @default("")
+
   cartId String
   cart   Cart   @relation(fields: [cartId], references: [id], onDelete: Cascade)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@unique([cartId, productId])
+  @@unique([cartId, productId, variantKey])
   @@index([cartId])
   @@index([productId])
   @@map("carts_items")
@@ -150,7 +205,16 @@ model Order {
   id          String      @id @default(uuid())
   orderNumber String      @unique @default(cuid())
   status      OrderStatus
-  totalAmount Decimal     @db.Decimal(10, 2)
+
+  // Every component is stored, not just the total. Rates and coupon terms change
+  // over time, so an old order must be able to explain its own arithmetic
+  // without depending on today's configuration.
+  subtotal       Decimal @default(0) @db.Decimal(10, 2)
+  discountAmount Decimal @default(0) @db.Decimal(10, 2)
+  shippingFee    Decimal @default(0) @db.Decimal(10, 2)
+  taxAmount      Decimal @default(0) @db.Decimal(10, 2)
+  // subtotal - discountAmount + shippingFee + taxAmount
+  totalAmount    Decimal @db.Decimal(10, 2)
 
   userId String
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -158,6 +222,14 @@ model Order {
   cartId String?
   cart   Cart?   @relation(fields: [cartId], references: [id])
 
+  couponId String?
+  coupon   Coupon? @relation(fields: [couponId], references: [id])
+
+  addressId String?
+  address   Address? @relation(fields: [addressId], references: [id])
+
+  // Flattened copy of the address as it was at purchase time. Kept even when
+  // addressId is set: editing a saved address must not rewrite past orders.
   shippingAddress String?
 
   orderItems OrderItem[]
@@ -197,6 +269,12 @@ model Payment {
   paymentMethod String?
   transactionId String?
 
+  // Running total of money sent back. Kept separately from `status` so a partial
+  // refund is representable — status alone cannot say "half of it came back".
+  refundedAmount Decimal   @default(0) @db.Decimal(10, 2)
+  refundedAt     DateTime?
+  refundReason   String?
+
   userId String
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -210,6 +288,139 @@ model Payment {
   @@index([userId])
   @@index([transactionId])
   @@map("payments")
+}
+
+model ProductVariant {
+  id String @id @default(uuid())
+
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  sku String @unique
+
+  /// What distinguishes this variant, e.g. { "Size": "M", "Color": "Black" }.
+  options Json
+
+  /// Rendered form of `options`, e.g. "M / Black". Denormalised so the cart,
+  /// order snapshot and UI all say the same thing without re-deriving it.
+  label String
+
+  /// Overrides the product price. Null means "same as the product".
+  price Decimal? @db.Decimal(10, 2)
+
+  stock    Int     @default(0)
+  imageUrl String?
+  isActive Boolean @default(true)
+
+  cartItems  CartItem[]
+  orderItems OrderItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([productId])
+  @@index([sku])
+  @@map("product_variants")
+}
+
+model Address {
+  id String @id @default(uuid())
+
+  fullName   String
+  phone      String
+  line1      String
+  line2      String?
+  city       String
+  state      String?
+  postalCode String
+  country    String  @default("VN")
+
+  isDefault Boolean @default(false)
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  orders Order[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@map("addresses")
+}
+
+model Coupon {
+  id   String       @id @default(uuid())
+  code String       @unique
+  type DiscountType
+
+  // PERCENT: 10 means 10%. FIXED: 10 means $10 off.
+  value Decimal @db.Decimal(10, 2)
+
+  // Basket must reach this before the code applies.
+  minOrderAmount Decimal? @db.Decimal(10, 2)
+  // Ceiling for PERCENT codes, so "50% off" cannot take $900 off a laptop.
+  maxDiscount    Decimal? @db.Decimal(10, 2)
+
+  // null = unlimited. usedCount is incremented inside the order transaction so
+  // two simultaneous checkouts cannot both claim the last use.
+  maxUses   Int?
+  usedCount Int  @default(0)
+
+  startsAt  DateTime?
+  expiresAt DateTime?
+  isActive  Boolean   @default(true)
+
+  orders Order[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([code])
+  @@index([isActive])
+  @@map("coupons")
+}
+
+model Review {
+  id      String  @id @default(uuid())
+  rating  Int // 1..5, enforced by the DTO
+  title   String?
+  comment String?
+
+  // True when the reviewer actually bought the product. Checked at write time
+  // and stored, so the badge survives even if the order is later deleted.
+  isVerifiedPurchase Boolean @default(false)
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // One review per person per product; editing replaces it.
+  @@unique([userId, productId])
+  @@index([productId])
+  @@index([userId])
+  @@map("reviews")
+}
+
+model WishlistItem {
+  id String @id @default(uuid())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([userId, productId])
+  @@index([userId])
+  @@map("wishlist_items")
 }
 
 model Contact {

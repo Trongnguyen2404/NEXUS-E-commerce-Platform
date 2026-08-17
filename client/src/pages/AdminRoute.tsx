@@ -2,16 +2,12 @@ import { Navigate, Outlet } from 'react-router-dom';
 import { useAuthStore } from '../store/useAuthStore';
 
 const AdminRoute = () => {
-  const { user, isAuthenticated } = useAuthStore();
+  const user = useAuthStore((state) => state.user);
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
 
-  // Bắt chuẩn role dù object bị lồng nhau (user.role hoặc user.user.role)
-  const userRole = user?.role || user?.user?.role;
-
-  // Bật F12 lên xem dòng này, bạn sẽ biết ngay tại sao nó lỗi lúc trước
-  console.log("🔒 Check Quyền Admin:", { isAuthenticated, role: userRole, rawUser: user });
-
-  // Nếu chưa đăng nhập HOẶC role không phải ADMIN (bỏ qua viết hoa/thường)
-  if (!isAuthenticated || String(userRole).toUpperCase() !== 'ADMIN') {
+  // Store chỉ lưu `response.user`, nên role luôn nằm phẳng ở user.role —
+  // không còn phải dò thêm user.user.role như trước.
+  if (!isAuthenticated || user?.role !== 'ADMIN') {
     // Đá văng ra trang chủ
     return <Navigate to="/" replace />;
   }

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuthStore } from '../store/useAuthStore';
 // Thêm MessageSquare vào đây
-import { Shield, Package, Layers, X, ShoppingCart, Users, MessageSquare } from 'lucide-react';
+import { Shield, Package, Layers, X, ShoppingCart, Users, MessageSquare, LayoutDashboard, Tag } from 'lucide-react';
 
 const AdminMenu = () => {
   const { user } = useAuthStore();
@@ -10,15 +10,16 @@ const AdminMenu = () => {
   const location = useLocation();
 
   // BẢO MẬT: Không phải ADMIN thì KHÔNG render (ẩn hoàn toàn)
-  const userRole = user?.role || (user as any)?.user?.role;
-  if (String(userRole).toUpperCase() !== 'ADMIN') return null;
+  if (user?.role !== 'ADMIN') return null;
 
   const menuItems = [
+    { path: '/admin', label: 'Dashboard', icon: LayoutDashboard },
     { path: '/admin/products', label: 'Products', icon: Package },
     { path: '/admin/categories', label: 'Categories', icon: Layers },
     { path: '/admin/orders', label: 'Orders', icon: ShoppingCart },
     { path: '/admin/users', label: 'Users', icon: Users },
-    { path: '/admin/contacts', label: 'Contacts', icon: MessageSquare }, // MỤC MỚI ĐÂY NÈ!
+    { path: '/admin/contacts', label: 'Contacts', icon: MessageSquare },
+    { path: '/admin/coupons', label: 'Promo codes', icon: Tag }, // MỤC MỚI ĐÂY NÈ!
   ];
 
   return (

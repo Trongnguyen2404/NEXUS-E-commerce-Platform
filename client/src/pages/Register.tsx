@@ -1,8 +1,10 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { Loader2 } from 'lucide-react';
 import { toast } from 'react-toastify';
-import axiosClient from '../api/axiosClient';
+import axiosClient, { getErrorMessage } from '../api/axiosClient';
 import { useAuthStore } from '../store/useAuthStore';
+import type { AuthResponse } from '../types/api';
 
 const Register = () => {
   const [firstName, setFirstName] = useState('');
@@ -20,107 +22,113 @@ const Register = () => {
 
     try {
       // Gọi API POST /auth/register
-      const response: any = await axiosClient.post('/auth/register', {
+      const response = await axiosClient.post<AuthResponse>('/auth/register', {
         firstName,
         lastName,
         email,
         password,
       });
-      
+
       // Đăng nhập luôn ngay sau khi đăng ký thành công
       login(response.user, response.accessToken);
-      
+
       toast.success('Account created successfully!');
       navigate('/');
-    } catch (error: any) {
-      // Xử lý "bóc" lỗi từ NestJS
-      let errorMessage = 'Registration failed. Please try again.';
-      
-      if (error && error.message) {
-        if (Array.isArray(error.message)) {
-          // Ghép tất cả các lỗi của ValidationPipe lại, hoặc chỉ lấy cái đầu
-          errorMessage = error.message[0]; 
-        } else {
-          // Bắt lỗi ConflictException (Ví dụ: "User with this email already exists")
-          errorMessage = error.message;
-        }
-      }
-      
-      toast.error(errorMessage);
+    } catch (error) {
+      // getErrorMessage bóc cả mảng lỗi của ValidationPipe lẫn message đơn của
+      // ConflictException ("User with this email already exists").
+      toast.error(getErrorMessage(error, 'Registration failed. Please try again.'));
     } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    <div className="min-h-[70vh] flex items-center justify-center px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full space-y-8">
-        <div>
-          <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900 tracking-tight">
-            Join NEXUS
-          </h2>
-          <p className="mt-2 text-center text-sm text-gray-600">
-            Already have an account?{' '}
-            <Link to="/login" className="font-medium text-blue-600 hover:text-blue-500 transition-colors">
-              Sign in
-            </Link>
-          </p>
-        </div>
-        <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
-          <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700">First Name</label>
-                <input
-                  type="text"
-                  value={firstName}
-                  onChange={(e) => setFirstName(e.target.value)}
-                  className="appearance-none relative block w-full px-3 py-3 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-lg focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm mt-1"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Last Name</label>
-                <input
-                  type="text"
-                  value={lastName}
-                  onChange={(e) => setLastName(e.target.value)}
-                  className="appearance-none relative block w-full px-3 py-3 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-lg focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm mt-1"
-                />
-              </div>
-            </div>
-            
+    <div className="min-h-[70vh] flex items-center justify-center px-4 sm:px-6 lg:px-8 py-12">
+      <div className="max-w-md w-full">
+        <h1 className="text-3xl font-black uppercase tracking-tight text-center mb-3">
+          Join Nexus
+        </h1>
+        <p className="text-center text-sm font-medium text-gray-500 mb-8">
+          Already have an account?{' '}
+          <Link to="/login" className="font-semibold text-brand-ink hover:text-black transition-colors">
+            Sign in
+          </Link>
+        </p>
+
+        <form onSubmit={handleSubmit} className="space-y-6">
+          <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700">Email address *</label>
+              <label htmlFor="firstName" className="block text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-3">
+                First name
+              </label>
               <input
-                type="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="appearance-none relative block w-full px-3 py-3 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-lg focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm mt-1"
+                id="firstName"
+                type="text"
+                autoComplete="given-name"
+                value={firstName}
+                onChange={(e) => setFirstName(e.target.value)}
+                className="w-full bg-surface-muted border-2 border-transparent focus:border-black rounded-2xl py-4 px-5 text-sm font-medium outline-none transition-all"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700">Password *</label>
+              <label htmlFor="lastName" className="block text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-3">
+                Last name
+              </label>
               <input
-                type="password"
-                required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="appearance-none relative block w-full px-3 py-3 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-lg focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm mt-1"
-                placeholder="Min. 8 characters with symbol"
+                id="lastName"
+                type="text"
+                autoComplete="family-name"
+                value={lastName}
+                onChange={(e) => setLastName(e.target.value)}
+                className="w-full bg-surface-muted border-2 border-transparent focus:border-black rounded-2xl py-4 px-5 text-sm font-medium outline-none transition-all"
               />
             </div>
           </div>
 
           <div>
-            <button
-              type="submit"
-              disabled={isLoading}
-              className="group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-medium rounded-lg text-white bg-black hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-900 disabled:opacity-50 transition-colors"
-            >
-              {isLoading ? 'Creating account...' : 'Create account'}
-            </button>
+            <label htmlFor="email" className="block text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-3">
+              Email address
+            </label>
+            <input
+              id="email"
+              type="email"
+              required
+              autoComplete="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="you@example.com"
+              className="w-full bg-surface-muted border-2 border-transparent focus:border-black rounded-2xl py-4 px-5 text-sm font-medium outline-none transition-all"
+            />
           </div>
+
+          <div>
+            <label htmlFor="password" className="block text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-3">
+              Password
+            </label>
+            <input
+              id="password"
+              type="password"
+              required
+              autoComplete="new-password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="••••••••"
+              className="w-full bg-surface-muted border-2 border-transparent focus:border-black rounded-2xl py-4 px-5 text-sm font-medium outline-none transition-all"
+            />
+            <p className="mt-3 text-xs font-medium text-gray-400 leading-relaxed">
+              At least 8 characters, with an uppercase letter, a lowercase letter,
+              a number and a special character.
+            </p>
+          </div>
+
+          <button
+            type="submit"
+            disabled={isLoading}
+            className="w-full bg-black text-white py-4 rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-gray-800 transition-all flex items-center justify-center disabled:opacity-50"
+          >
+            {isLoading ? <Loader2 className="animate-spin" size={18} /> : 'Create account'}
+          </button>
         </form>
       </div>
     </div>

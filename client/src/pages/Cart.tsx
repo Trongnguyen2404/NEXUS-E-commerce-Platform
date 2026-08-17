@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Trash2, ArrowRight, ShoppingBag, Loader2 } from 'lucide-react';
 import { toast } from 'react-toastify';
-import axiosClient from '../api/axiosClient';
+import axiosClient, { getErrorMessage } from '../api/axiosClient';
 import { useCartStore } from '../store/useCartStore';
 
 const Cart = () => {
@@ -11,13 +11,9 @@ const Cart = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isUpdating, setIsUpdating] = useState(false);
 
+  // Việc chặn người chưa đăng nhập đã do ProtectedRoute lo, không cần tự kiểm
+  // tra localStorage ở đây nữa.
   useEffect(() => {
-    if (!localStorage.getItem('accessToken')) {
-      toast.warning('Please sign in to view your cart.');
-      navigate('/login');
-      return;
-    }
-
     const loadData = async () => {
       setIsLoading(true);
       await fetchCart();
@@ -32,8 +28,8 @@ const Cart = () => {
     try {
       await axiosClient.patch(`/cart/items/${cartItemId}`, { quantity: newQuantity });
       await fetchCart();
-    } catch (error: any) {
-      toast.error(error.message || 'Insufficient stock.');
+    } catch (error) {
+      toast.error(getErrorMessage(error, 'Insufficient stock.'));
     } finally {
       setIsUpdating(false);
     }
@@ -45,8 +41,8 @@ const Cart = () => {
       await axiosClient.delete(`/cart/items/${cartItemId}`);
       await fetchCart();
       toast.success('Item removed from cart.');
-    } catch (error: any) {
-      toast.error('Error removing item.');
+    } catch (error) {
+      toast.error(getErrorMessage(error, 'Error removing item.'));
     } finally {
       setIsUpdating(false);
     }
@@ -85,7 +81,7 @@ const Cart = () => {
 
       <div className="flex flex-col lg:flex-row gap-12 items-start">
         <div className="flex-1 w-full space-y-6">
-          {cart.cartItems.map((item: any) => (
+          {cart.cartItems.map((item) => (
             <div key={item.id} className={`flex gap-6 bg-white border border-gray-200 p-6 rounded-2xl ${isUpdating ? 'opacity-50 pointer-events-none' : ''}`}>
               <div className="w-32 h-32 bg-[#F3F4F6] rounded-xl p-4 flex items-center justify-center shrink-0">
                 <img src={item.product.imageUrl || ''} alt={item.product.name} className="max-h-full object-contain mix-blend-multiply" />
@@ -95,10 +91,14 @@ const Cart = () => {
                 <div className="flex justify-between items-start">
                   <div>
                     <h3 className="text-lg font-black uppercase leading-tight mb-1">{item.product.name}</h3>
-                    <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">{item.product.category}</p>
+                    {item.variantLabel ? (
+                      <p className="text-xs font-bold text-black uppercase tracking-widest">{item.variantLabel}</p>
+                    ) : (
+                      <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">{item.product.category}</p>
+                    )}
                   </div>
-                  {/* Làm tròn 2 chữ số thập phân */}
-                  <p className="text-xl font-black">${Number(item.product.price).toFixed(2)}</p>
+                  {/* unitPrice, not product.price — a variant may cost more. */}
+                  <p className="text-xl font-black">${Number(item.unitPrice).toFixed(2)}</p>
                 </div>
 
                 <div className="flex items-center justify-between mt-4">
@@ -145,7 +145,7 @@ const Cart = () => {
 
           <button
             onClick={() => navigate('/checkout')} // CHANGE THIS LINE
-            className="w-full bg-blue-600 text-white py-5 rounded-2xl font-black uppercase tracking-widest text-sm hover:bg-blue-700 transition-all shadow-lg shadow-blue-500/30 flex items-center justify-center space-x-2"
+            className="w-full bg-brand text-white py-5 rounded-2xl font-black uppercase tracking-widest text-sm hover:bg-brand-ink transition-all shadow-lg shadow-brand/30 flex items-center justify-center space-x-2"
           >
             <span>Proceed to Checkout</span>
             <ArrowRight size={18} />

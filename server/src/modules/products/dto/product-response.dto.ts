@@ -1,4 +1,5 @@
 import { ApiProperty } from "@nestjs/swagger";
+import { VariantResponseDto } from "@/modules/products/dto/variant.dto";
 
 export class ProductResponseDto {
     @ApiProperty({
@@ -55,6 +56,30 @@ export class ProductResponseDto {
         example: true,
     })
     isActive: boolean;
+
+    @ApiProperty({
+        description: 'True when this product sells in variants; price and stock then come from those.',
+        example: false,
+    })
+    hasVariants: boolean;
+
+    @ApiProperty({
+        description: 'Variants, empty for products that do not use them',
+        type: () => [VariantResponseDto],
+    })
+    variants: VariantResponseDto[];
+
+    @ApiProperty({
+        description: 'Mean review score, 0 when there are no reviews yet',
+        example: 4.3,
+    })
+    rating: number;
+
+    @ApiProperty({
+        description: 'How many reviews this product has',
+        example: 27,
+    })
+    reviewCount: number;
 
     @ApiProperty({
         description: 'Creation timestamp',

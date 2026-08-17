@@ -30,6 +30,13 @@ export class OrderItemResponseDto {
   @ApiProperty()
   productName: string;
 
+  @ApiProperty({
+    nullable: true,
+    description: 'Variant bought, as it read at purchase time. Null for products without variants.',
+    example: 'M / Black',
+  })
+  variantLabel: string | null;
+
   @ApiProperty()
   quantity: number;
 
@@ -51,12 +58,31 @@ export class OrderResponseDto {
   id: string;
 
   @ApiProperty()
+  orderNumber: string;
+
+  @ApiProperty()
   userId: string;
 
   @ApiProperty()
   status: string;
 
+  // The full breakdown, so an order can explain its own arithmetic.
+  @ApiProperty({ description: 'Goods before discount, shipping and tax' })
+  subtotal: number;
+
   @ApiProperty()
+  discountAmount: number;
+
+  @ApiProperty()
+  shippingFee: number;
+
+  @ApiProperty()
+  taxAmount: number;
+
+  @ApiProperty({ nullable: true, description: 'Promo code applied, if any' })
+  couponCode: string | null;
+
+  @ApiProperty({ description: 'subtotal - discount + shipping + tax' })
   total: number;
 
   @ApiProperty()

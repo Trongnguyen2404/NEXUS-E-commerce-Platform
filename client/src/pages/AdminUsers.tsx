@@ -1,19 +1,21 @@
 import { useState, useEffect } from 'react';
 import { Loader2, Trash2, Users, Shield, User } from 'lucide-react';
 import { toast } from 'react-toastify';
-import axiosClient from '../api/axiosClient';
+import axiosClient, { getErrorMessage } from '../api/axiosClient';
 import { useAuthStore } from '../store/useAuthStore';
+import type { User as ApiUser } from '../types/api';
 
 const AdminUsers = () => {
-  const [usersList, setUsersList] = useState<any[]>([]);
+  const [usersList, setUsersList] = useState<ApiUser[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const currentUser = useAuthStore(state => state.user);
 
   const fetchUsers = async () => {
     try {
-      const res: any = await axiosClient.get('/users');
-      setUsersList(Array.isArray(res) ? res : (res?.data || []));
-    } catch (e) {
+      // GET /users trả thẳng một mảng, không bọc trong { data }.
+      const res = await axiosClient.get<ApiUser[]>('/users');
+      setUsersList(Array.isArray(res) ? res : []);
+    } catch {
       toast.error('Failed to load users');
     } finally {
       setIsLoading(false);
@@ -32,8 +34,8 @@ const AdminUsers = () => {
       await axiosClient.delete(`/users/${id}`);
       toast.success('User deleted');
       fetchUsers();
-    } catch (e: any) {
-      toast.error(e.message || 'Delete failed');
+    } catch (e) {
+      toast.error(getErrorMessage(e, 'Delete failed'));
     }
   };
 
@@ -88,7 +90,7 @@ const AdminUsers = () => {
                     <button 
                       onClick={() => handleDelete(u.id)} 
                       disabled={u.id === currentUser?.id}
-                      className="p-3 bg-red-50 text-red-500 hover:bg-[#E30000] hover:text-white rounded-xl transition-colors disabled:opacity-30 disabled:hover:bg-red-50 disabled:hover:text-red-500"
+                      className="p-3 bg-state-danger-soft text-state-danger hover:bg-state-danger hover:text-white rounded-xl transition-colors disabled:opacity-30 disabled:hover:bg-state-danger-soft disabled:hover:text-state-danger"
                     >
                       <Trash2 size={16} />
                     </button>
