@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
-import { Loader2, Plus, Trash2, Edit3, X, Image as ImageIcon, Layers } from 'lucide-react';
+import { Loader2, Plus, Trash2, Edit3, X, Layers } from 'lucide-react';
 import { toast } from 'react-toastify';
 import axiosClient, { getErrorMessage } from '../api/axiosClient';
+import ImageUpload from '../components/ImageUpload';
 import type { Category, PageResponse } from '../types/api';
 
 const AdminCategories = () => {
@@ -157,26 +158,13 @@ const AdminCategories = () => {
                 </div>
 
                 {/* CỘT PHẢI: PREVIEW ẢNH GIỐNG PRODUCT */}
-                <div className="md:col-span-5 space-y-6 flex flex-col">
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-black uppercase text-gray-500 tracking-widest">Image URL</label>
-                    <div className="relative">
-                      <ImageIcon className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-                      <input type="text" value={formData.imageUrl} onChange={e => setFormData({...formData, imageUrl: e.target.value})} className="w-full bg-[#F5F5F7] border-2 border-transparent focus:border-black rounded-2xl p-4 pl-12 text-sm font-bold text-black outline-none" />
-                    </div>
-                  </div>
-                  
-                  {/* Khu vực hiện ảnh */}
-                  <div className="flex-1 bg-[#F5F5F7] rounded-3xl border-2 border-dashed border-gray-300 flex flex-col items-center justify-center p-4 relative overflow-hidden min-h-[200px]">
-                    {formData.imageUrl ? (
-                      <img src={formData.imageUrl} alt="Preview" className="max-w-full max-h-full object-contain brightness-[1.02] contrast-[1.05]" onError={(e) => { e.currentTarget.src = 'https://placehold.co/400x400?text=Invalid+Image'; }} />
-                    ) : (
-                      <div className="text-center text-gray-400">
-                        <ImageIcon size={48} className="mx-auto mb-2 opacity-50" />
-                        <p className="text-[10px] font-black uppercase tracking-widest">No Image</p>
-                      </div>
-                    )}
-                  </div>
+                <div className="md:col-span-5">
+                  <ImageUpload
+                    value={formData.imageUrl}
+                    onChange={(url) => setFormData({ ...formData, imageUrl: url })}
+                    folder="categories"
+                    label="Category image"
+                  />
                 </div>
 
               </form>

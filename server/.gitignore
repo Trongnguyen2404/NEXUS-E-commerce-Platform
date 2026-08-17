@@ -56,3 +56,8 @@ pids
 report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 
 /generated/prisma
+
+# Locally uploaded images. Real deployments use Cloudinary; these are dev only.
+# Leading slash matters: a bare `uploads/` would also swallow the source folder
+# at src/modules/uploads/, and the app would not compile from a fresh clone.
+/uploads/

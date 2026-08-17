@@ -22,6 +22,7 @@ import { DashboardModule } from '@/modules/dashboard/dashboard.module';
 import { PricingModule } from '@/modules/pricing/pricing.module';
 import { AddressesModule } from '@/modules/addresses/addresses.module';
 import { CouponsModule } from '@/modules/coupons/coupons.module';
+import { UploadsModule } from '@/modules/uploads/uploads.module';
 
 @Module({
   imports: [
@@ -42,7 +43,8 @@ import { CouponsModule } from '@/modules/coupons/coupons.module';
     PricingModule,
     HealthModule,
     AuthModule, UsersModule, CategoryModule, ProductsModule, OrdersModule, CartModule, PaymentsModule, ContactsModule,
-    ReviewsModule, WishlistModule, DashboardModule, AddressesModule, CouponsModule
+    ReviewsModule, WishlistModule, DashboardModule, AddressesModule, CouponsModule,
+    UploadsModule
   ],
   controllers: [AppController],
   providers: [

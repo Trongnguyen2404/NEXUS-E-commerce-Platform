@@ -54,8 +54,16 @@ services:
       PORT: 3000
       DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-nexus}?schema=public
       ALLOWED_ORIGINS: http://localhost:5173
+      # Uploaded images are served by this container, so the URLs handed to the
+      # browser must point at the published port, not at the container's.
+      API_PUBLIC_URL: http://localhost:3000
     ports:
       - "3000:3000"
+    volumes:
+      # Only used when CLOUDINARY_URL is blank. Without this the container's
+      # filesystem is thrown away on `docker compose up --build` and every
+      # uploaded image goes with it.
+      - uploads_data:/app/uploads
     depends_on:
       postgres:
         condition: service_healthy
@@ -79,3 +87,4 @@ services:
 
 volumes:
   postgres_data:
+  uploads_data:

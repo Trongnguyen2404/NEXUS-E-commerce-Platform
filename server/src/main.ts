@@ -7,11 +7,15 @@ import helmet from 'helmet';
 import compression from 'compression';
 import { AllExceptionsFilter } from '@/common/filters/all-exceptions.filter';
 import { LoggingInterceptor } from '@/common/interceptors/logging.interceptor';
+import type { NestExpressApplication } from '@nestjs/platform-express';
+import { resolve } from 'node:path';
 
 async function bootstrap() {
   // rawBody is required by the Stripe webhook: the signature is computed over the
   // exact bytes Stripe sent, so the parsed JSON body cannot be used to verify it.
-  const app = await NestFactory.create(AppModule, { rawBody: true });
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
+    rawBody: true,
+  });
 
   const isProduction = process.env.NODE_ENV === 'production';
   // Swagger serves inline scripts and styles, which helmet's default CSP blocks.
@@ -35,6 +39,25 @@ async function bootstrap() {
   // The refresh token travels as an httpOnly cookie, so it has to be parsed
   // before the jwt-refresh strategy can read it.
   app.use(cookieParser());
+
+  // Serve uploaded images ourselves, but only on the local storage driver —
+  // with Cloudinary configured nothing is ever written to this directory.
+  // Mounted outside the api/v1 prefix: these are files, not API routes.
+  if (!process.env.CLOUDINARY_URL) {
+    app.useStaticAssets(resolve(process.env.UPLOAD_DIR ?? 'uploads'), {
+      prefix: '/uploads',
+      // Filenames are random and never reused, so a stale cache is impossible.
+      maxAge: '30d',
+      index: false,
+      setHeaders: (res) => {
+        // helmet defaults Cross-Origin-Resource-Policy to same-origin, which
+        // makes the browser refuse these images: the frontend is a different
+        // origin (5173 against the API's 3000). CORS headers do not cover
+        // <img>, so this has to be relaxed explicitly.
+        res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+      },
+    });
+  }
 
   //Set Global validation
   app.useGlobalPipes(

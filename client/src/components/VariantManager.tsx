@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Loader2, Plus, Trash2, X } from 'lucide-react';
 import { toast } from 'react-toastify';
 import axiosClient, { getErrorMessage } from '../api/axiosClient';
+import ImageUpload from './ImageUpload';
 import type { ProductVariant } from '../types/api';
 
 interface Props {
@@ -14,7 +15,13 @@ interface Props {
   onChanged: () => void;
 }
 
-const EMPTY = { sku: '', optionsText: 'Size: M, Color: Black', price: '', stock: '' };
+const EMPTY = {
+  sku: '',
+  optionsText: 'Size: M, Color: Black',
+  price: '',
+  stock: '',
+  imageUrl: '',
+};
 
 const field =
   'w-full bg-surface-muted border-2 border-transparent focus:border-black rounded-2xl py-3 px-4 text-sm font-medium outline-none transition-all';
@@ -83,6 +90,9 @@ const VariantManager = ({ productId, productName, basePrice, onClose, onChanged 
         stock: Number(form.stock),
         // Blank means "inherit the product price", which is not the same as 0.
         ...(form.price ? { price: Number(form.price) } : {}),
+        // Same for the image: omitted rather than sent empty, so the product's
+        // own photo is used.
+        ...(form.imageUrl ? { imageUrl: form.imageUrl } : {}),
       });
 
       toast.success('Variant added');
@@ -252,6 +262,13 @@ const VariantManager = ({ productId, productName, basePrice, onClose, onChanged 
                   className={field} />
               </div>
             </div>
+
+            <ImageUpload
+              value={form.imageUrl}
+              onChange={(url) => setForm({ ...form, imageUrl: url })}
+              folder="variants"
+              label="Image (optional — falls back to the product photo)"
+            />
 
             <button type="submit" disabled={isSubmitting}
               className="bg-black text-white px-8 py-3.5 rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-gray-800 transition-all disabled:opacity-50 flex items-center gap-2">

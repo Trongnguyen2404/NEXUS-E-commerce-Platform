@@ -36,6 +36,12 @@ RUN npm ci --omit=dev
 
 COPY --from=build /app/dist ./dist
 
+# Create the upload directory owned by the runtime user *before* dropping
+# privileges. A named volume mounted here inherits the image's ownership for
+# this path; without it Docker creates the directory as root and the
+# unprivileged process cannot write a single file.
+RUN mkdir -p /app/uploads && chown node:node /app/uploads
+
 # Never run the app as root.
 USER node
 

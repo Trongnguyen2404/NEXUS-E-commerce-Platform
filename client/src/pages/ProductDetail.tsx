@@ -9,6 +9,7 @@ import StarRating from '../components/StarRating';
 import WishlistButton from '../components/WishlistButton';
 import ProductReviews from '../components/ProductReviews';
 import VariantPicker from '../components/VariantPicker';
+import { PRODUCT_PLACEHOLDER } from '../components/productPlaceholder';
 import type { PaginatedResponse, Product, ProductVariant } from '../types/api';
 
 const ProductDetail = () => {
@@ -130,22 +131,17 @@ const ProductDetail = () => {
           {/* CỘT TRÁI: Hình ảnh (UI chuẩn Apple/Boutique) */}
           <div className="space-y-4">
             <div className="relative bg-[#F5F5F7] rounded-2xl p-12 flex items-center justify-center aspect-square border border-gray-100">
+              {/* Falls back to the product photo: a variant image is optional,
+                  and most sizes of the same thing look identical anyway. */}
               <img
-                src={product.imageUrl || ''}
+                src={selectedVariant?.imageUrl || product.imageUrl || PRODUCT_PLACEHOLDER}
                 alt={product.name}
                 className="w-full h-full object-contain mix-blend-multiply drop-shadow-xl"
+                onError={(e) => {
+                  e.currentTarget.src = PRODUCT_PLACEHOLDER;
+                }}
               />
               <WishlistButton productId={product.id} className="absolute top-5 right-5" size={20} />
-            </div>
-            
-            {/* Thumbnails thanh lịch */}
-            <div className="flex space-x-3">
-              <div className="w-20 h-16 bg-[#F5F5F7] rounded-lg border-2 border-black flex items-center justify-center p-2 cursor-pointer">
-                <img src={product.imageUrl || ''} className="max-h-full object-contain mix-blend-multiply" />
-              </div>
-              <div className="w-20 h-16 bg-[#F5F5F7] rounded-lg border border-transparent hover:border-gray-300 flex items-center justify-center p-2 cursor-pointer transition-colors">
-                <img src={product.imageUrl || ''} className="max-h-full object-contain mix-blend-multiply opacity-60" />
-              </div>
             </div>
           </div>
 
