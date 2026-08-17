@@ -59,8 +59,10 @@ const Navbar = () => {
     }
   }, [fetchCart, fetchWishlist]);
 
+  // data-sticky-top is read by Select: a dropdown that opens upwards stops at
+  // the bottom edge of this bar rather than rendering over it.
   return (
-    <nav className="bg-white border-b border-gray-200 sticky top-0 z-40">
+    <nav data-sticky-top className="bg-white border-b border-gray-200 sticky top-0 z-40">
       <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-20">
 

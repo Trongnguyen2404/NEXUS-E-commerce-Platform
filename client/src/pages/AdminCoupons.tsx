@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Loader2, Percent, Plus, Tag, Trash2, X } from 'lucide-react';
 import { toast } from 'react-toastify';
 import axiosClient, { getErrorMessage } from '../api/axiosClient';
+import Select from '../components/Select';
 import type { Coupon, DiscountType } from '../types/api';
 
 const EMPTY_FORM = {
@@ -221,12 +222,16 @@ const AdminCoupons = () => {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label htmlFor="type" className={label}>Type</label>
-                  <select id="type" value={form.type}
-                    onChange={(e) => setForm({ ...form, type: e.target.value as DiscountType })}
-                    className={`${field} cursor-pointer`}>
-                    <option value="PERCENT">Percentage</option>
-                    <option value="FIXED">Fixed amount</option>
-                  </select>
+                  <Select
+                    id="type"
+                    value={form.type}
+                    onChange={(next) => setForm({ ...form, type: next })}
+                    options={[
+                      { value: 'PERCENT', label: 'Percentage' },
+                      { value: 'FIXED', label: 'Fixed amount' },
+                    ] satisfies { value: DiscountType; label: string }[]}
+                    className={`${field} inline-flex items-center justify-between gap-3 cursor-pointer`}
+                  />
                 </div>
                 <div>
                   <label htmlFor="value" className={label}>

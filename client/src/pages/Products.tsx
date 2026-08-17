@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Search, ChevronLeft, ChevronRight, Loader2, SlidersHorizontal, X } from 'lucide-react';
+import { Search, ChevronLeft, ChevronRight, Loader2, SlidersHorizontal } from 'lucide-react';
 import axiosClient from '../api/axiosClient';
 import StarRating from '../components/StarRating';
 import WishlistButton from '../components/WishlistButton';
+import Select from '../components/Select';
 import { PRODUCT_PLACEHOLDER } from '../components/productPlaceholder';
 import type { Category, PageResponse, PaginatedResponse, Product } from '../types/api';
 
@@ -113,11 +114,6 @@ const Products = () => {
     fetchProducts();
   }, [search, category, sort, minPrice, maxPrice, inStock, page]);
 
-  const clearFilters = () => {
-    setSearchInput('');
-    setSearchParams({}, { replace: true });
-  };
-
   return (
     <div className="min-h-screen bg-white pb-16">
       <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 pt-12">
@@ -164,29 +160,14 @@ const Products = () => {
             )}
           </button>
 
-          <select
+          <Select
             value={sort}
-            onChange={(e) => updateParams({ sort: e.target.value })}
-            aria-label="Sort products"
-            className="bg-[#F5F5F7] rounded-xl px-5 py-3 text-[11px] font-black uppercase tracking-widest outline-none focus:ring-2 focus:ring-black cursor-pointer"
-          >
-            {SORT_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
+            onChange={(next) => updateParams({ sort: next })}
+            options={SORT_OPTIONS}
+            ariaLabel="Sort products"
+            className="inline-flex items-center justify-between gap-3 bg-surface-muted hover:bg-surface-sunken rounded-xl px-5 py-3 text-[11px] font-black uppercase tracking-widest outline-none focus-visible:ring-2 focus-visible:ring-black cursor-pointer transition-colors"
+          />
 
-          {(activeFilterCount > 0 || search) && (
-            <button
-              type="button"
-              onClick={clearFilters}
-              className="inline-flex items-center gap-1.5 px-4 py-3 text-[11px] font-black uppercase tracking-widest text-gray-400 hover:text-black transition-colors"
-            >
-              <X size={14} />
-              Clear all
-            </button>
-          )}
         </div>
 
         {showFilters && (
@@ -195,19 +176,16 @@ const Products = () => {
               <label htmlFor="filter-category" className="block text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-3">
                 Category
               </label>
-              <select
+              <Select
                 id="filter-category"
                 value={category}
-                onChange={(e) => updateParams({ category: e.target.value })}
-                className="w-full bg-white rounded-xl px-4 py-3.5 text-sm font-medium outline-none focus:ring-2 focus:ring-black cursor-pointer"
-              >
-                <option value="">All categories</option>
-                {categories.map((c) => (
-                  <option key={c.id} value={c.slug ?? c.name}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
+                onChange={(next) => updateParams({ category: next })}
+                options={[
+                  { value: '', label: 'All categories' },
+                  ...categories.map((c) => ({ value: c.slug ?? c.name, label: c.name })),
+                ]}
+                className="w-full inline-flex items-center justify-between gap-3 bg-white hover:bg-surface-muted rounded-xl px-4 py-3.5 text-sm font-medium outline-none focus-visible:ring-2 focus-visible:ring-black cursor-pointer transition-colors"
+              />
             </div>
 
             <div>

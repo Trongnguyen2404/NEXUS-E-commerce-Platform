@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import { Loader2, Trash2, Package } from 'lucide-react';
 import { toast } from 'react-toastify';
 import axiosClient, { getErrorMessage } from '../api/axiosClient';
+import Select from '../components/Select';
+import type { SelectOption } from '../components/Select';
 import type { Order, OrderStatus, PageResponse } from '../types/api';
 
 /**
@@ -16,6 +18,21 @@ const STATUS_STYLES: Record<OrderStatus, string> = {
   DELIVERED: 'bg-state-success-soft text-state-success',
   CANCELLED: 'bg-state-danger-soft text-state-danger',
 };
+
+/**
+ * The same five colours, carried into the menu as a dot.
+ *
+ * Tinting each row's background instead would fight the highlight on whichever
+ * row the keyboard or pointer is on, and five pastel stripes in a column is
+ * harder to read than one solid list.
+ */
+const STATUS_OPTIONS: SelectOption<OrderStatus>[] = [
+  { value: 'PENDING', label: 'Pending', dotClassName: 'bg-state-warning' },
+  { value: 'PROCESSING', label: 'Processing', dotClassName: 'bg-state-info' },
+  { value: 'SHIPPED', label: 'Shipped', dotClassName: 'bg-brand' },
+  { value: 'DELIVERED', label: 'Delivered', dotClassName: 'bg-state-success' },
+  { value: 'CANCELLED', label: 'Cancelled', dotClassName: 'bg-state-danger' },
+];
 
 const AdminOrders = () => {
   const [orders, setOrders] = useState<Order[]>([]);
@@ -105,17 +122,13 @@ const AdminOrders = () => {
                   
                   {/* Cột chọn trạng thái Đơn hàng */}
                   <td className="py-5 px-4 text-center">
-                    <select 
+                    <Select
                       value={o.status}
-                      onChange={(e) => handleStatusChange(o.id, e.target.value as OrderStatus)}
-                      className={`px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest outline-none cursor-pointer appearance-none border-2 border-transparent focus:border-black transition-all ${STATUS_STYLES[o.status] ?? STATUS_STYLES.PENDING}`}
-                    >
-                      <option value="PENDING" className="bg-white text-black">PENDING</option>
-                      <option value="PROCESSING" className="bg-white text-black">PROCESSING</option>
-                      <option value="SHIPPED" className="bg-white text-black">SHIPPED</option>
-                      <option value="DELIVERED" className="bg-white text-black">DELIVERED</option>
-                      <option value="CANCELLED" className="bg-white text-black">CANCELLED</option>
-                    </select>
+                      onChange={(next) => handleStatusChange(o.id, next)}
+                      options={STATUS_OPTIONS}
+                      ariaLabel={`Status for order ${o.orderNumber}`}
+                      className={`inline-flex items-center justify-between gap-2 px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest outline-none cursor-pointer border-2 border-transparent focus-visible:border-black transition-all ${STATUS_STYLES[o.status] ?? STATUS_STYLES.PENDING}`}
+                    />
                   </td>
 
                   <td className="py-5 px-4 text-right">

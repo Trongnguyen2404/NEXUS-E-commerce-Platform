@@ -49,6 +49,28 @@ export default {
           sunken: '#EDEDF0',  // admin page background
         },
       },
+
+      /**
+       * Dropdown panels. Short and slight on purpose — a menu that animates for
+       * long enough to notice is a menu you are waiting on, and the panel opens
+       * under the pointer where any movement reads as lag.
+       *
+       * Both are wrapped in prefers-reduced-motion by the utilities below.
+       */
+      keyframes: {
+        'pop-down': {
+          from: { opacity: '0', transform: 'translateY(-4px) scale(0.98)' },
+          to: { opacity: '1', transform: 'translateY(0) scale(1)' },
+        },
+        'pop-up': {
+          from: { opacity: '0', transform: 'translateY(4px) scale(0.98)' },
+          to: { opacity: '1', transform: 'translateY(0) scale(1)' },
+        },
+      },
+      animation: {
+        'pop-down': 'pop-down 120ms cubic-bezier(0.16, 1, 0.3, 1)',
+        'pop-up': 'pop-up 120ms cubic-bezier(0.16, 1, 0.3, 1)',
+      },
     },
   },
   plugins: [],

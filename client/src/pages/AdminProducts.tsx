@@ -3,6 +3,7 @@ import { Loader2, Plus, Trash2, Edit3, X, Box, Layers } from 'lucide-react';
 import { toast } from 'react-toastify';
 import axiosClient, { getErrorMessage } from '../api/axiosClient';
 import ImageUpload from '../components/ImageUpload';
+import Select from '../components/Select';
 import VariantManager from '../components/VariantManager';
 import type { Category, PageResponse, PaginatedResponse, Product } from '../types/api';
 
@@ -226,10 +227,16 @@ const AdminProducts = () => {
                     </div>
                     <div className="space-y-2">
                       <label className="text-[10px] font-black uppercase text-gray-500 tracking-widest">Category <span className="text-red-500">*</span></label>
-                      <select required value={formData.categoryId} onChange={e => setFormData({...formData, categoryId: e.target.value})} className="w-full bg-[#F5F5F7] border-2 border-transparent focus:border-black rounded-2xl p-4 text-sm font-bold text-black outline-none transition-all cursor-pointer">
-                        <option value="" disabled>-- Select a category --</option>
-                        {categories.map(cat => <option key={cat.id} value={cat.id}>{cat.name}</option>)}
-                      </select>
+                      {/* No `required` to lean on now that this is not a native
+                          control — handleSubmit already refuses an empty one. */}
+                      <Select
+                        value={formData.categoryId}
+                        onChange={(next) => setFormData({ ...formData, categoryId: next })}
+                        options={categories.map(cat => ({ value: cat.id, label: cat.name }))}
+                        placeholder="Select a category"
+                        ariaLabel="Category"
+                        className="w-full inline-flex items-center justify-between gap-3 bg-surface-muted border-2 border-transparent focus-visible:border-black rounded-2xl p-4 text-sm font-bold text-black outline-none transition-all cursor-pointer hover:bg-surface-sunken"
+                      />
                     </div>
                   </div>
                   <div className="grid grid-cols-2 gap-6">
