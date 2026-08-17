@@ -1,4 +1,8 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { Coupon } from '@prisma/client';
 import { PrismaService } from '@/prisma/prisma.service';
 import {
@@ -51,7 +55,8 @@ export class CouponsService {
 
     if (code && code !== existing.code) {
       const clash = await this.prisma.coupon.findUnique({ where: { code } });
-      if (clash) throw new ConflictException(`Coupon code ${code} already exists`);
+      if (clash)
+        throw new ConflictException(`Coupon code ${code} already exists`);
     }
 
     const coupon = await this.prisma.coupon.update({
@@ -94,11 +99,19 @@ export class CouponsService {
       ...(code ? { code } : {}),
       ...(dto.type !== undefined ? { type: dto.type } : {}),
       ...(dto.value !== undefined ? { value: dto.value } : {}),
-      ...(dto.minOrderAmount !== undefined ? { minOrderAmount: dto.minOrderAmount } : {}),
-      ...(dto.maxDiscount !== undefined ? { maxDiscount: dto.maxDiscount } : {}),
+      ...(dto.minOrderAmount !== undefined
+        ? { minOrderAmount: dto.minOrderAmount }
+        : {}),
+      ...(dto.maxDiscount !== undefined
+        ? { maxDiscount: dto.maxDiscount }
+        : {}),
       ...(dto.maxUses !== undefined ? { maxUses: dto.maxUses } : {}),
-      ...(dto.startsAt !== undefined ? { startsAt: new Date(dto.startsAt) } : {}),
-      ...(dto.expiresAt !== undefined ? { expiresAt: new Date(dto.expiresAt) } : {}),
+      ...(dto.startsAt !== undefined
+        ? { startsAt: new Date(dto.startsAt) }
+        : {}),
+      ...(dto.expiresAt !== undefined
+        ? { expiresAt: new Date(dto.expiresAt) }
+        : {}),
       ...(dto.isActive !== undefined ? { isActive: dto.isActive } : {}),
     };
   }
@@ -109,7 +122,9 @@ export class CouponsService {
       code: coupon.code,
       type: coupon.type,
       value: Number(coupon.value),
-      minOrderAmount: coupon.minOrderAmount ? Number(coupon.minOrderAmount) : null,
+      minOrderAmount: coupon.minOrderAmount
+        ? Number(coupon.minOrderAmount)
+        : null,
       maxDiscount: coupon.maxDiscount ? Number(coupon.maxDiscount) : null,
       maxUses: coupon.maxUses,
       usedCount: coupon.usedCount,

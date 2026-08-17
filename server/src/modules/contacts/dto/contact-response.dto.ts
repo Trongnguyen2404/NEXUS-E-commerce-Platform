@@ -1,15 +1,15 @@
-import { ContactStatus } from "@prisma/client";
+import { ContactStatus } from '@prisma/client';
 
 export class ContactResponseDto {
-    id: string;
+  id: string;
 
-    name: string;
+  name: string;
 
-    email: string;
+  email: string;
 
-    subject: string;
+  subject: string;
 
-    message: string;
+  message: string;
 
-    status: ContactStatus;
+  status: ContactStatus;
 }

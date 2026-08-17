@@ -8,7 +8,8 @@ export class MetricDto {
   previous: number;
 
   @ApiProperty({
-    description: 'Percent change vs the previous period. Null when the previous period was zero, because "up 100%" from nothing is meaningless.',
+    description:
+      'Percent change vs the previous period. Null when the previous period was zero, because "up 100%" from nothing is meaningless.',
     nullable: true,
     example: 12.5,
   })
@@ -19,7 +20,10 @@ export class DashboardOverviewDto {
   @ApiProperty({ description: 'Days covered by the current period' })
   periodDays: number;
 
-  @ApiProperty({ type: MetricDto, description: 'Money actually captured (completed payments)' })
+  @ApiProperty({
+    type: MetricDto,
+    description: 'Money actually captured (completed payments)',
+  })
   revenue: MetricDto;
 
   @ApiProperty({ type: MetricDto, description: 'Orders placed' })
@@ -37,7 +41,10 @@ export class DashboardOverviewDto {
   @ApiProperty({ description: 'Orders waiting to be paid or actioned' })
   pendingOrders: number;
 
-  @ApiProperty({ description: 'Active products with stock at or below the low-stock threshold' })
+  @ApiProperty({
+    description:
+      'Active products with stock at or below the low-stock threshold',
+  })
   lowStockProducts: number;
 
   @ApiProperty({ description: 'Active products with no stock at all' })
@@ -63,7 +70,8 @@ export class TopProductDto {
   @ApiProperty() name: string;
   @ApiProperty({ nullable: true }) imageUrl: string | null;
   @ApiProperty({ description: 'Units sold in the period' }) unitsSold: number;
-  @ApiProperty({ description: 'Revenue generated in the period' }) revenue: number;
+  @ApiProperty({ description: 'Revenue generated in the period' })
+  revenue: number;
 }
 
 export class StatusBreakdownDto {

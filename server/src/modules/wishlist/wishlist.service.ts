@@ -11,7 +11,9 @@ export class WishlistService {
     private reviewsService: ReviewsService,
   ) {}
 
-  async findAll(userId: string): Promise<{ data: ProductResponseDto[]; total: number }> {
+  async findAll(
+    userId: string,
+  ): Promise<{ data: ProductResponseDto[]; total: number }> {
     const items = await this.prisma.wishlistItem.findMany({
       where: { userId },
       orderBy: { createdAt: 'desc' },
@@ -35,7 +37,10 @@ export class WishlistService {
    * Idempotent: adding something already saved is a no-op rather than a 409.
    * A heart button that errors on a double click is worse than one that doesn't.
    */
-  async add(userId: string, productId: string): Promise<{ message: string; inWishlist: true }> {
+  async add(
+    userId: string,
+    productId: string,
+  ): Promise<{ message: string; inWishlist: true }> {
     const product = await this.prisma.product.findUnique({
       where: { id: productId },
       select: { id: true },
@@ -52,19 +57,27 @@ export class WishlistService {
   }
 
   /** Also idempotent — removing something absent is still "not in the wishlist". */
-  async remove(userId: string, productId: string): Promise<{ message: string; inWishlist: false }> {
+  async remove(
+    userId: string,
+    productId: string,
+  ): Promise<{ message: string; inWishlist: false }> {
     await this.prisma.wishlistItem.deleteMany({ where: { userId, productId } });
     return { message: 'Removed from your wishlist', inWishlist: false };
   }
 
   /** Single round trip for the heart button on a product page. */
-  async toggle(userId: string, productId: string): Promise<{ message: string; inWishlist: boolean }> {
+  async toggle(
+    userId: string,
+    productId: string,
+  ): Promise<{ message: string; inWishlist: boolean }> {
     const existing = await this.prisma.wishlistItem.findUnique({
       where: { userId_productId: { userId, productId } },
       select: { id: true },
     });
 
-    return existing ? this.remove(userId, productId) : this.add(userId, productId);
+    return existing
+      ? this.remove(userId, productId)
+      : this.add(userId, productId);
   }
 
   // Mirrors ProductsService.formatProduct so the wishlist returns product
@@ -73,7 +86,9 @@ export class WishlistService {
     product: Product & { category: Category; variants: ProductVariant[] },
     rating?: { average: number; total: number },
   ): ProductResponseDto {
-    const activeVariants = product.variants.filter((variant) => variant.isActive);
+    const activeVariants = product.variants.filter(
+      (variant) => variant.isActive,
+    );
 
     return {
       ...product,
@@ -81,7 +96,9 @@ export class WishlistService {
       // shown is the cheapest option and the stock is the buyable total.
       price:
         product.hasVariants && activeVariants.length > 0
-          ? Math.min(...activeVariants.map((v) => Number(v.price ?? product.price)))
+          ? Math.min(
+              ...activeVariants.map((v) => Number(v.price ?? product.price)),
+            )
           : Number(product.price),
       stock: product.hasVariants
         ? activeVariants.reduce((sum, v) => sum + v.stock, 0)

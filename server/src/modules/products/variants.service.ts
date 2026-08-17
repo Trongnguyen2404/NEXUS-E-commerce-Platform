@@ -39,13 +39,21 @@ export class VariantsService {
     return product.variants.map((variant) => this.map(variant, product));
   }
 
-  async create(productId: string, dto: CreateVariantDto): Promise<VariantResponseDto> {
-    const product = await this.prisma.product.findUnique({ where: { id: productId } });
+  async create(
+    productId: string,
+    dto: CreateVariantDto,
+  ): Promise<VariantResponseDto> {
+    const product = await this.prisma.product.findUnique({
+      where: { id: productId },
+    });
     if (!product) throw new NotFoundException('Product not found');
 
     const sku = dto.sku.trim().toUpperCase();
-    const clash = await this.prisma.productVariant.findUnique({ where: { sku } });
-    if (clash) throw new ConflictException(`A variant with SKU ${sku} already exists`);
+    const clash = await this.prisma.productVariant.findUnique({
+      where: { sku },
+    });
+    if (clash)
+      throw new ConflictException(`A variant with SKU ${sku} already exists`);
 
     const variant = await this.prisma.$transaction(async (tx) => {
       const created = await tx.productVariant.create({
@@ -64,7 +72,10 @@ export class VariantsService {
       // Adding the first variant flips the product over: from here on its own
       // price and stock columns stop being what customers buy against.
       if (!product.hasVariants) {
-        await tx.product.update({ where: { id: productId }, data: { hasVariants: true } });
+        await tx.product.update({
+          where: { id: productId },
+          data: { hasVariants: true },
+        });
       }
 
       return created;
@@ -82,8 +93,11 @@ export class VariantsService {
 
     const sku = dto.sku ? dto.sku.trim().toUpperCase() : undefined;
     if (sku && sku !== variant.sku) {
-      const clash = await this.prisma.productVariant.findUnique({ where: { sku } });
-      if (clash) throw new ConflictException(`A variant with SKU ${sku} already exists`);
+      const clash = await this.prisma.productVariant.findUnique({
+        where: { sku },
+      });
+      if (clash)
+        throw new ConflictException(`A variant with SKU ${sku} already exists`);
     }
 
     const updated = await this.prisma.productVariant.update({

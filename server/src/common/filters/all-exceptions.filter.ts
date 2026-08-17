@@ -10,6 +10,15 @@ import { Prisma } from '@prisma/client';
 import type { Request, Response } from 'express';
 
 /**
+ * Anything at or above this is our fault rather than the caller's.
+ *
+ * Typed as a plain number on purpose: `describe()` can return any status, so
+ * comparing it against the HttpStatus enum member directly is a comparison
+ * between two different types, which the linter rightly objects to.
+ */
+const SERVER_ERROR_FLOOR: number = HttpStatus.INTERNAL_SERVER_ERROR;
+
+/**
  * Single exit point for every error leaving the API.
  *
  * Without it, anything that is not an HttpException — a Prisma error, a typo,
@@ -30,7 +39,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
 
     // 5xx means we broke something — log the whole exception. 4xx is the client
     // being told "no", which is routine, so keep it to one line.
-    if (status >= HttpStatus.INTERNAL_SERVER_ERROR) {
+    if (status >= SERVER_ERROR_FLOOR) {
       this.logger.error(
         `${request.method} ${request.url} -> ${status}`,
         exception instanceof Error ? exception.stack : String(exception),

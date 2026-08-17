@@ -1,13 +1,15 @@
-import { Type } from "class-transformer";
-import { IsOptional, IsString } from "class-validator";
+import { Type } from 'class-transformer';
+import { IsEnum, IsOptional, IsString } from 'class-validator';
+import { OrderStatus } from '@prisma/client';
 
-export enum OrderStatus {
-  PENDING = 'PENDING',
-  PROCESSING = 'PROCESSING',
-  SHIPPED = 'SHIPPED',
-  DELIVERED = 'DELIVERED',
-  CANCELLED = 'CANCELLED',
-}
+/**
+ * Re-exported so every DTO and service shares one definition.
+ *
+ * A second, hand-written copy of this enum used to live here. It type-checked
+ * against the Prisma one only because the two lists happened to match, and
+ * would have stopped matching silently the moment either changed.
+ */
+export { OrderStatus };
 
 export class QueryOrderDto {
   @IsOptional()
@@ -18,8 +20,14 @@ export class QueryOrderDto {
   @Type(() => Number)
   limit?: number = 10;
 
+  // No @Type(() => Number) here, however much it looks like the two fields
+  // above: Number('CANCELLED') is NaN, NaN is falsy, and the `if (status)`
+  // guard in the service therefore never fired — filtering by status quietly
+  // returned every order instead.
   @IsOptional()
-  @Type(() => Number)
+  @IsEnum(OrderStatus, {
+    message: `status must be one of ${Object.values(OrderStatus).join(', ')}`,
+  })
   status?: OrderStatus;
 
   @IsOptional()

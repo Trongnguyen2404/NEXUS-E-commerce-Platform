@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { Address } from '@prisma/client';
 import { PrismaService } from '@/prisma/prisma.service';
 import {
@@ -21,8 +21,13 @@ export class AddressesService {
     return addresses.map((address) => this.map(address));
   }
 
-  async create(userId: string, dto: CreateAddressDto): Promise<AddressResponseDto> {
-    const existingCount = await this.prisma.address.count({ where: { userId } });
+  async create(
+    userId: string,
+    dto: CreateAddressDto,
+  ): Promise<AddressResponseDto> {
+    const existingCount = await this.prisma.address.count({
+      where: { userId },
+    });
     // The first address saved is the default whether or not it was asked for,
     // otherwise checkout has nothing to preselect.
     const shouldBeDefault = dto.isDefault ?? existingCount === 0;
@@ -73,7 +78,10 @@ export class AddressesService {
           orderBy: { createdAt: 'desc' },
         });
         if (next) {
-          await tx.address.update({ where: { id: next.id }, data: { isDefault: true } });
+          await tx.address.update({
+            where: { id: next.id },
+            data: { isDefault: true },
+          });
         }
       }
     });
@@ -94,7 +102,9 @@ export class AddressesService {
 
   /** Orders reference addresses by id, so ownership has to be proven first. */
   private async mustOwn(id: string, userId: string): Promise<Address> {
-    const address = await this.prisma.address.findFirst({ where: { id, userId } });
+    const address = await this.prisma.address.findFirst({
+      where: { id, userId },
+    });
     if (!address) throw new NotFoundException('Address not found');
     return address;
   }

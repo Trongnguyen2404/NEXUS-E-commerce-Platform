@@ -1,5 +1,12 @@
 import { ApiProperty, ApiPropertyOptional, PartialType } from '@nestjs/swagger';
-import { IsBoolean, IsNotEmpty, IsOptional, IsString, Matches, MaxLength } from 'class-validator';
+import {
+  IsBoolean,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  Matches,
+  MaxLength,
+} from 'class-validator';
 
 export class CreateAddressDto {
   @ApiProperty({ example: 'Nguyen Van A' })
@@ -13,7 +20,9 @@ export class CreateAddressDto {
   @IsNotEmpty({ message: 'Phone number is required' })
   // Deliberately loose: this ships internationally, and a strict national
   // pattern would reject valid numbers.
-  @Matches(/^[+\d][\d\s().-]{5,19}$/, { message: 'Please provide a valid phone number' })
+  @Matches(/^[+\d][\d\s().-]{5,19}$/, {
+    message: 'Please provide a valid phone number',
+  })
   phone: string;
 
   @ApiProperty({ example: '123 Le Loi' })
@@ -52,7 +61,9 @@ export class CreateAddressDto {
   @MaxLength(60)
   country?: string;
 
-  @ApiPropertyOptional({ description: 'Make this the default shipping address' })
+  @ApiPropertyOptional({
+    description: 'Make this the default shipping address',
+  })
   @IsOptional()
   @IsBoolean()
   isDefault?: boolean;

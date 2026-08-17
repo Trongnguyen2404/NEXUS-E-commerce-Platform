@@ -17,7 +17,8 @@ export class CreateVariantDto {
   @IsString()
   @IsNotEmpty({ message: 'SKU is required' })
   @Matches(/^[A-Za-z0-9_-]{2,64}$/, {
-    message: 'SKU must be 2–64 characters, letters/numbers/dash/underscore only',
+    message:
+      'SKU must be 2–64 characters, letters/numbers/dash/underscore only',
   })
   sku: string;
 
@@ -63,9 +64,14 @@ export class VariantResponseDto {
   @ApiProperty() sku: string;
   @ApiProperty({ example: { Size: 'M', Color: 'Black' } })
   options: Record<string, string>;
-  @ApiProperty({ description: 'Rendered options, e.g. "M / Black"', example: 'M / Black' })
+  @ApiProperty({
+    description: 'Rendered options, e.g. "M / Black"',
+    example: 'M / Black',
+  })
   label: string;
-  @ApiProperty({ description: 'Effective price — the variant price, or the product price' })
+  @ApiProperty({
+    description: 'Effective price — the variant price, or the product price',
+  })
   price: number;
   @ApiProperty() stock: number;
   @ApiPropertyOptional({ nullable: true }) imageUrl: string | null;

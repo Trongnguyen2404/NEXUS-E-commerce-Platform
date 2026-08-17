@@ -1,6 +1,12 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsNumber, IsOptional, IsString, MaxLength, Min } from 'class-validator';
+import {
+  IsNumber,
+  IsOptional,
+  IsString,
+  MaxLength,
+  Min,
+} from 'class-validator';
 
 export class RefundPaymentDto {
   @ApiPropertyOptional({
@@ -10,7 +16,10 @@ export class RefundPaymentDto {
     minimum: 0.01,
   })
   @Type(() => Number)
-  @IsNumber({ maxDecimalPlaces: 2 }, { message: 'Amount must have at most 2 decimal places' })
+  @IsNumber(
+    { maxDecimalPlaces: 2 },
+    { message: 'Amount must have at most 2 decimal places' },
+  )
   @Min(0.01, { message: 'Refund amount must be greater than zero' })
   @IsOptional()
   amount?: number;

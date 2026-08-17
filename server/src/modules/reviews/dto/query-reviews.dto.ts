@@ -18,7 +18,11 @@ export class QueryReviewsDto {
   @IsOptional()
   limit: number = 10;
 
-  @ApiPropertyOptional({ description: 'Only reviews with this star rating', minimum: 1, maximum: 5 })
+  @ApiPropertyOptional({
+    description: 'Only reviews with this star rating',
+    minimum: 1,
+    maximum: 5,
+  })
   @Type(() => Number)
   @IsInt()
   @Min(1)
@@ -26,7 +30,10 @@ export class QueryReviewsDto {
   @IsOptional()
   rating?: number;
 
-  @ApiPropertyOptional({ enum: ['newest', 'highest', 'lowest'], default: 'newest' })
+  @ApiPropertyOptional({
+    enum: ['newest', 'highest', 'lowest'],
+    default: 'newest',
+  })
   @IsIn(['newest', 'highest', 'lowest'])
   @IsOptional()
   sort: 'newest' | 'highest' | 'lowest' = 'newest';

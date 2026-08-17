@@ -1,4 +1,13 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Patch,
+  Post,
+  UseGuards,
+} from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiConflictResponse,
@@ -68,7 +77,8 @@ export class CouponsController {
   @ModerateThrottle()
   @ApiOperation({
     summary: '[ADMIN] Delete a coupon',
-    description: 'A coupon already used on an order is deactivated instead, so past orders keep their explanation.',
+    description:
+      'A coupon already used on an order is deactivated instead, so past orders keep their explanation.',
   })
   @ApiParam({ name: 'id', description: 'Coupon ID' })
   @ApiOkResponse({ description: 'Deleted or deactivated' })

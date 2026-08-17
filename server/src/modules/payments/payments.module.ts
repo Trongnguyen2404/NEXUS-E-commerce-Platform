@@ -5,6 +5,6 @@ import { StripeWebhookController } from '@/modules/payments/stripe-webhook.contr
 
 @Module({
   controllers: [PaymentsController, StripeWebhookController],
-  providers: [PaymentsService]
+  providers: [PaymentsService],
 })
 export class PaymentsModule {}

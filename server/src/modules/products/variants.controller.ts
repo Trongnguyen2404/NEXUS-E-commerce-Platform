@@ -1,4 +1,13 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Patch,
+  Post,
+  UseGuards,
+} from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiConflictResponse,
@@ -48,12 +57,15 @@ export class VariantsController {
   @ApiOperation({
     summary: '[ADMIN] Add a variant',
     description:
-      "Adding the first variant switches the product over: its own price and stock stop being what customers buy against.",
+      'Adding the first variant switches the product over: its own price and stock stop being what customers buy against.',
   })
   @ApiParam({ name: 'productId', description: 'Product ID' })
   @ApiCreatedResponse({ type: VariantResponseDto })
   @ApiConflictResponse({ description: 'SKU already exists' })
-  async create(@Param('productId') productId: string, @Body() dto: CreateVariantDto) {
+  async create(
+    @Param('productId') productId: string,
+    @Body() dto: CreateVariantDto,
+  ) {
     return await this.variantsService.create(productId, dto);
   }
 

@@ -1,5 +1,11 @@
 import { Injectable } from '@nestjs/common';
-import { ContactStatus, OrderStatus, PaymentStatus, Prisma, Role } from '@prisma/client';
+import {
+  ContactStatus,
+  OrderStatus,
+  PaymentStatus,
+  Prisma,
+  Role,
+} from '@prisma/client';
 import { PrismaService } from '@/prisma/prisma.service';
 import {
   DashboardOverviewDto,
@@ -46,15 +52,34 @@ export class DashboardService {
     ] = await Promise.all([
       // Revenue is read from payments, not orders: it is the money actually
       // captured, so an unpaid or cancelled order never inflates it.
-      this.prisma.payment.aggregate({ where: paidInRange(currentFrom), _sum: { amount: true }, _count: true }),
-      this.prisma.payment.aggregate({ where: paidInRange(previousFrom, currentFrom), _sum: { amount: true } }),
-      this.prisma.payment.aggregate({ where: { status: PaymentStatus.COMPLETED }, _sum: { amount: true } }),
+      this.prisma.payment.aggregate({
+        where: paidInRange(currentFrom),
+        _sum: { amount: true },
+        _count: true,
+      }),
+      this.prisma.payment.aggregate({
+        where: paidInRange(previousFrom, currentFrom),
+        _sum: { amount: true },
+      }),
+      this.prisma.payment.aggregate({
+        where: { status: PaymentStatus.COMPLETED },
+        _sum: { amount: true },
+      }),
 
       this.prisma.order.count({ where: { createdAt: { gte: currentFrom } } }),
-      this.prisma.order.count({ where: { createdAt: { gte: previousFrom, lt: currentFrom } } }),
+      this.prisma.order.count({
+        where: { createdAt: { gte: previousFrom, lt: currentFrom } },
+      }),
 
-      this.prisma.user.count({ where: { role: Role.USER, createdAt: { gte: currentFrom } } }),
-      this.prisma.user.count({ where: { role: Role.USER, createdAt: { gte: previousFrom, lt: currentFrom } } }),
+      this.prisma.user.count({
+        where: { role: Role.USER, createdAt: { gte: currentFrom } },
+      }),
+      this.prisma.user.count({
+        where: {
+          role: Role.USER,
+          createdAt: { gte: previousFrom, lt: currentFrom },
+        },
+      }),
 
       this.prisma.order.count({ where: { status: OrderStatus.PENDING } }),
       this.prisma.product.count({
@@ -69,11 +94,16 @@ export class DashboardService {
 
     return {
       periodDays: days,
-      revenue: this.metric(currentRevenue, Number(revenuePrevious._sum.amount ?? 0)),
+      revenue: this.metric(
+        currentRevenue,
+        Number(revenuePrevious._sum.amount ?? 0),
+      ),
       orders: this.metric(ordersCurrent, ordersPrevious),
       customers: this.metric(customersCurrent, customersPrevious),
       averageOrderValue:
-        paidOrderCount === 0 ? 0 : Math.round((currentRevenue / paidOrderCount) * 100) / 100,
+        paidOrderCount === 0
+          ? 0
+          : Math.round((currentRevenue / paidOrderCount) * 100) / 100,
       lifetimeRevenue: Number(lifetime._sum.amount ?? 0),
       pendingOrders,
       lowStockProducts,
@@ -179,7 +209,9 @@ export class DashboardService {
       _count: { status: true },
     });
 
-    const counts = new Map(grouped.map((row) => [row.status, row._count.status]));
+    const counts = new Map(
+      grouped.map((row) => [row.status, row._count.status]),
+    );
 
     // Every status is listed, including the empty ones, so the chart legend
     // does not change shape as data arrives.
@@ -195,7 +227,9 @@ export class DashboardService {
       previous: Math.round(previous * 100) / 100,
       // Growth from zero is undefined, not infinite — the UI shows a dash.
       changePercent:
-        previous === 0 ? null : Math.round(((current - previous) / previous) * 1000) / 10,
+        previous === 0
+          ? null
+          : Math.round(((current - previous) / previous) * 1000) / 10,
     };
   }
 }

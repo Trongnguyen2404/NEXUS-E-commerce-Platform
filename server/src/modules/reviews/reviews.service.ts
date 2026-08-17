@@ -166,7 +166,13 @@ export class ReviewsService {
       _count: { rating: true },
     });
 
-    const distribution: Record<number, number> = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+    const distribution: Record<number, number> = {
+      1: 0,
+      2: 0,
+      3: 0,
+      4: 0,
+      5: 0,
+    };
     let total = 0;
     let weighted = 0;
 
@@ -185,7 +191,10 @@ export class ReviewsService {
   }
 
   /** Did this user ever receive this product in a fulfilled order? */
-  private async hasPurchased(userId: string, productId: string): Promise<boolean> {
+  private async hasPurchased(
+    userId: string,
+    productId: string,
+  ): Promise<boolean> {
     const count = await this.prisma.orderItem.count({
       where: {
         productId,

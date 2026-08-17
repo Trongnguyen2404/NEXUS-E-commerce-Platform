@@ -23,7 +23,7 @@ async function bootstrap() {
   const enableSwagger = !isProduction;
 
   //project description
-  app.setGlobalPrefix('api/v1')
+  app.setGlobalPrefix('api/v1');
 
   // Security headers: HSTS, X-Frame-Options, nosniff, referrer policy, etc.
   app.use(
@@ -68,7 +68,6 @@ async function bootstrap() {
       transformOptions: {
         enableImplicitConversion: true,
       },
-
     }),
   );
 
@@ -117,7 +116,10 @@ async function bootstrap() {
         },
         'JWT-refresh',
       )
-      .addServer(`http://localhost:${process.env.PORT ?? 3000}`, 'Development server')
+      .addServer(
+        `http://localhost:${process.env.PORT ?? 3000}`,
+        'Development server',
+      )
       .build();
 
     const document = SwaggerModule.createDocument(app, config);
@@ -151,8 +153,7 @@ async function bootstrap() {
     Logger.log('Swagger disabled (NODE_ENV=production)', 'Bootstrap');
   }
 }
-bootstrap().catch((e) =>
-{
+bootstrap().catch((e) => {
   Logger.error('Error starting server', e);
-  process.exit(1)
+  process.exit(1);
 });

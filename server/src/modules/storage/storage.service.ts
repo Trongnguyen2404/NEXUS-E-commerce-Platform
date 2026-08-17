@@ -1,4 +1,9 @@
-import { BadRequestException, Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  Logger,
+  OnModuleInit,
+} from '@nestjs/common';
 import { v2 as cloudinary } from 'cloudinary';
 import sharp from 'sharp';
 import { randomUUID } from 'node:crypto';
@@ -154,16 +159,21 @@ export class StorageService implements OnModuleInit {
       );
     }
 
-    return sharp(buffer)
-      // Applies the EXIF orientation flag before the metadata is discarded,
-      // otherwise portrait phone photos come out on their side.
-      .rotate()
-      .resize(MAX_EDGE, MAX_EDGE, { fit: 'inside', withoutEnlargement: true })
-      .webp({ quality: 82 })
-      .toBuffer();
+    return (
+      sharp(buffer)
+        // Applies the EXIF orientation flag before the metadata is discarded,
+        // otherwise portrait phone photos come out on their side.
+        .rotate()
+        .resize(MAX_EDGE, MAX_EDGE, { fit: 'inside', withoutEnlargement: true })
+        .webp({ quality: 82 })
+        .toBuffer()
+    );
   }
 
-  private async toDisk(image: Buffer, folder: UploadFolder): Promise<StoredImage> {
+  private async toDisk(
+    image: Buffer,
+    folder: UploadFolder,
+  ): Promise<StoredImage> {
     const dir = join(this.localDir, folder);
     await mkdir(dir, { recursive: true });
 
@@ -176,7 +186,10 @@ export class StorageService implements OnModuleInit {
     return { url: `${this.publicBase()}/uploads/${folder}/${name}` };
   }
 
-  private toCloudinary(image: Buffer, folder: UploadFolder): Promise<StoredImage> {
+  private toCloudinary(
+    image: Buffer,
+    folder: UploadFolder,
+  ): Promise<StoredImage> {
     return new Promise((resolve, reject) => {
       const upload = cloudinary.uploader.upload_stream(
         { folder: `nexus/${folder}`, resource_type: 'image' },
@@ -186,7 +199,9 @@ export class StorageService implements OnModuleInit {
             // something they can act on.
             this.logger.error(`Cloudinary upload failed: ${error?.message}`);
             return reject(
-              new BadRequestException('Could not store the image. Please try again.'),
+              new BadRequestException(
+                'Could not store the image. Please try again.',
+              ),
             );
           }
 
@@ -207,7 +222,8 @@ export class StorageService implements OnModuleInit {
    */
   private publicBase(): string {
     const base =
-      process.env.API_PUBLIC_URL ?? `http://localhost:${process.env.PORT ?? 3000}`;
+      process.env.API_PUBLIC_URL ??
+      `http://localhost:${process.env.PORT ?? 3000}`;
 
     return base.replace(/\/+$/, '');
   }

@@ -54,7 +54,10 @@ const button = (href: string, label: string) => `
     ${label}
   </a>`;
 
-export const passwordResetEmail = (resetUrl: string, expiryMinutes: number) => ({
+export const passwordResetEmail = (
+  resetUrl: string,
+  expiryMinutes: number,
+) => ({
   subject: 'Reset your NEXUS password',
   html: layout(
     'Reset your password',
@@ -156,7 +159,9 @@ export const refundIssuedEmail = (refund: {
 }) => ({
   subject: `Refund issued for order ${refund.orderNumber}`,
   html: layout(
-    refund.isFullRefund ? 'Your refund is on its way' : 'A partial refund is on its way',
+    refund.isFullRefund
+      ? 'Your refund is on its way'
+      : 'A partial refund is on its way',
     `<p style="margin:0 0 24px;">We have sent <strong>${money(refund.amount)}</strong> back to your original payment method.</p>
      <p style="margin:0 0 8px;font-size:12px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#8e8e93;">Order number</p>
      <p style="margin:0 0 28px;font-size:16px;font-weight:700;color:#000;">${esc(refund.orderNumber)}</p>
@@ -165,7 +170,9 @@ export const refundIssuedEmail = (refund: {
      <p style="margin:0;">${button(refund.orderUrl, 'View your order')}</p>`,
   ),
   text: [
-    refund.isFullRefund ? 'Your refund is on its way' : 'A partial refund is on its way',
+    refund.isFullRefund
+      ? 'Your refund is on its way'
+      : 'A partial refund is on its way',
     '',
     `We have sent ${money(refund.amount)} back to your original payment method.`,
     `Order number: ${refund.orderNumber}`,

@@ -24,7 +24,10 @@ import { JwtAuthGuard } from '@/common/guards/jwt-auth.guard';
 import { RolesGuard } from '@/common/guards/roles.guard';
 import { Roles } from '@/common/decorators/roles.decorator';
 import { ModerateThrottle } from '@/common/decorators/custom-throttler.decorator';
-import { MAX_UPLOAD_BYTES, StorageService } from '@/modules/storage/storage.service';
+import {
+  MAX_UPLOAD_BYTES,
+  StorageService,
+} from '@/modules/storage/storage.service';
 import {
   UploadImageQueryDto,
   UploadResponseDto,
@@ -84,16 +87,23 @@ export class UploadsController {
     },
   })
   @ApiCreatedResponse({ type: UploadResponseDto })
-  @ApiBadRequestResponse({ description: 'Not an image, or an unsupported format' })
+  @ApiBadRequestResponse({
+    description: 'Not an image, or an unsupported format',
+  })
   @ApiPayloadTooLargeResponse({ description: 'Larger than 5MB' })
   async uploadImage(
     @UploadedFile() file: Express.Multer.File | undefined,
     @Query() query: UploadImageQueryDto,
   ): Promise<UploadResponseDto> {
     if (!file) {
-      throw new BadRequestException('No file received. Send it as the "file" field.');
+      throw new BadRequestException(
+        'No file received. Send it as the "file" field.',
+      );
     }
 
-    return await this.storage.saveImage(file.buffer, query.folder ?? 'products');
+    return await this.storage.saveImage(
+      file.buffer,
+      query.folder ?? 'products',
+    );
   }
 }

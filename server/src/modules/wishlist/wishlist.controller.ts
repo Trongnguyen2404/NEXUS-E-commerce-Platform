@@ -1,4 +1,11 @@
-import { Controller, Delete, Get, Param, Post, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Post,
+  UseGuards,
+} from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiNotFoundResponse,
@@ -38,7 +45,10 @@ export class WishlistController {
   })
   @ApiParam({ name: 'productId', description: 'Product ID' })
   @ApiNotFoundResponse({ description: 'Product not found' })
-  async add(@Param('productId') productId: string, @GetUser('id') userId: string) {
+  async add(
+    @Param('productId') productId: string,
+    @GetUser('id') userId: string,
+  ) {
     return await this.wishlistService.add(userId, productId);
   }
 
@@ -49,7 +59,10 @@ export class WishlistController {
     description: 'Returns the resulting state, for a heart button.',
   })
   @ApiParam({ name: 'productId', description: 'Product ID' })
-  async toggle(@Param('productId') productId: string, @GetUser('id') userId: string) {
+  async toggle(
+    @Param('productId') productId: string,
+    @GetUser('id') userId: string,
+  ) {
     return await this.wishlistService.toggle(userId, productId);
   }
 
@@ -57,7 +70,10 @@ export class WishlistController {
   @ModerateThrottle()
   @ApiOperation({ summary: 'Remove a product from your wishlist' })
   @ApiParam({ name: 'productId', description: 'Product ID' })
-  async remove(@Param('productId') productId: string, @GetUser('id') userId: string) {
+  async remove(
+    @Param('productId') productId: string,
+    @GetUser('id') userId: string,
+  ) {
     return await this.wishlistService.remove(userId, productId);
   }
 }

@@ -9,6 +9,6 @@ import { ReviewsModule } from '@/modules/reviews/reviews.module';
   // ReviewsModule supplies the aggregate ratings attached to each product.
   imports: [ReviewsModule],
   controllers: [ProductsController, VariantsController],
-  providers: [ProductsService, VariantsService]
+  providers: [ProductsService, VariantsService],
 })
-export class ProductsModule { }
+export class ProductsModule {}

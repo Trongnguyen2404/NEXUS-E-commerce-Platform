@@ -7,133 +7,139 @@ import { ChangePasswordDto } from '@/modules/users/dto/change-password.dto';
 
 @Injectable()
 export class UsersService {
-	private readonly SALT_ROUNDS = 12;
-	constructor(private prisma: PrismaService) { }
+  private readonly SALT_ROUNDS = 12;
+  constructor(private prisma: PrismaService) {}
 
-	async findOne(userId: string): Promise<UserResponseDto> {
-		const user = await this.prisma.user.findUnique({
-			where: { id: userId },
-			select: {
-				id: true,
-				email: true,
-				firstName: true,
-				lastName: true,
-				role: true,
-				createdAt: true,
-				updatedAt: true,
-				password: false,
-			},
-		});
+  async findOne(userId: string): Promise<UserResponseDto> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        email: true,
+        firstName: true,
+        lastName: true,
+        role: true,
+        createdAt: true,
+        updatedAt: true,
+        password: false,
+      },
+    });
 
-		if (!user) {
-			throw new NotFoundException('User not found');
-		}
-		return user;
-	}
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+    return user;
+  }
 
-	async findAll(): Promise<UserResponseDto[]> {
-		return await this.prisma.user.findMany({
-			select: {
-				id: true,
-				email: true,
-				firstName: true,
-				lastName: true,
-				role: true,
-				createdAt: true,
-				updatedAt: true,
-				password: false,
-			},
-			orderBy: { createdAt: 'desc' },
-		});
-	}
+  async findAll(): Promise<UserResponseDto[]> {
+    return await this.prisma.user.findMany({
+      select: {
+        id: true,
+        email: true,
+        firstName: true,
+        lastName: true,
+        role: true,
+        createdAt: true,
+        updatedAt: true,
+        password: false,
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
 
-	async update( userId: string, updateUserDto: UpdateUserDto): Promise<UserResponseDto> {
-		const existingUser = await this.prisma.user.findUnique({
-			where: { id: userId },
-		});
+  async update(
+    userId: string,
+    updateUserDto: UpdateUserDto,
+  ): Promise<UserResponseDto> {
+    const existingUser = await this.prisma.user.findUnique({
+      where: { id: userId },
+    });
 
-		if (!existingUser) {
-			throw new NotFoundException('User not found');
-		}
+    if (!existingUser) {
+      throw new NotFoundException('User not found');
+    }
 
-		if (updateUserDto.email && updateUserDto.email !== existingUser.email) {
-			const emailTaken = await this.prisma.user.findUnique({
-				where: { email: updateUserDto.email },
-			});
-			if (emailTaken) {
-				throw new NotFoundException('Email is already taken');
-			}
-		}
+    if (updateUserDto.email && updateUserDto.email !== existingUser.email) {
+      const emailTaken = await this.prisma.user.findUnique({
+        where: { email: updateUserDto.email },
+      });
+      if (emailTaken) {
+        throw new NotFoundException('Email is already taken');
+      }
+    }
 
-		// Update user profile
-		const updatedUser = await this.prisma.user.update({
-			where: { id: userId },
-			data: updateUserDto,
-			select: {
-				id: true,
-				email: true,
-				firstName: true,
-				lastName: true,
-				role: true,
-				createdAt: true,
-				updatedAt: true,
-				password: false,
-			},
-		});
+    // Update user profile
+    const updatedUser = await this.prisma.user.update({
+      where: { id: userId },
+      data: updateUserDto,
+      select: {
+        id: true,
+        email: true,
+        firstName: true,
+        lastName: true,
+        role: true,
+        createdAt: true,
+        updatedAt: true,
+        password: false,
+      },
+    });
 
-		return updatedUser;
-	}
+    return updatedUser;
+  }
 
-	async changePassword( userId: string, changePasswordDto: ChangePasswordDto): Promise<{ message: string }> {
-		const { currentPassword, newPassword } = changePasswordDto;
+  async changePassword(
+    userId: string,
+    changePasswordDto: ChangePasswordDto,
+  ): Promise<{ message: string }> {
+    const { currentPassword, newPassword } = changePasswordDto;
 
-		const user = await this.prisma.user.findUnique({
-			where: { id: userId },
-		});
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+    });
 
-		if (!user) {
-			throw new NotFoundException('User not found');
-		}
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
 
-		const isPasswordValid = await bcrypt.compare(
-			currentPassword,
-			user.password,
-		);
+    const isPasswordValid = await bcrypt.compare(
+      currentPassword,
+      user.password,
+    );
 
-		if (!isPasswordValid) {
-			throw new NotFoundException('Current password is incorrect');
-		}
+    if (!isPasswordValid) {
+      throw new NotFoundException('Current password is incorrect');
+    }
 
-		const isSamePassword = await bcrypt.compare(newPassword, user.password);
-		if (isSamePassword) {
-			throw new NotFoundException(
-				'New password must be different from the current password',
-			);
-		}
+    const isSamePassword = await bcrypt.compare(newPassword, user.password);
+    if (isSamePassword) {
+      throw new NotFoundException(
+        'New password must be different from the current password',
+      );
+    }
 
-		const hashedNewPassword = await bcrypt.hash(newPassword, this.SALT_ROUNDS);
+    const hashedNewPassword = await bcrypt.hash(newPassword, this.SALT_ROUNDS);
 
-		await this.prisma.user.update({
-			where: { id: userId },
-			data: { password: hashedNewPassword },
-		});
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { password: hashedNewPassword },
+    });
 
-		return { message: 'Password changed successfully' };
-	}
+    return { message: 'Password changed successfully' };
+  }
 
-	async remove(userId: string): Promise<{ message: string }> {
-		const user = await this.prisma.user.findUnique({
-			where: { id: userId },
-		});
+  async remove(userId: string): Promise<{ message: string }> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+    });
 
-		if (!user) {
-			throw new NotFoundException('User not found');
-		}
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
 
-		await this.prisma.user.delete({
-			where: { id: userId },
-		});
+    await this.prisma.user.delete({
+      where: { id: userId },
+    });
 
-		return { message: 'User account deleted successfully' };
-	}
+    return { message: 'User account deleted successfully' };
+  }
 }

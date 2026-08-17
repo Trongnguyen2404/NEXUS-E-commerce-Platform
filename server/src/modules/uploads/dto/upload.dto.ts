@@ -1,6 +1,9 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IsIn, IsOptional } from 'class-validator';
-import { UPLOAD_FOLDERS, type UploadFolder } from '@/modules/storage/storage.service';
+import {
+  UPLOAD_FOLDERS,
+  type UploadFolder,
+} from '@/modules/storage/storage.service';
 
 export class UploadImageQueryDto {
   @ApiPropertyOptional({

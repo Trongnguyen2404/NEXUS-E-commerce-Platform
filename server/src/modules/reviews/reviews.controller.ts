@@ -43,7 +43,8 @@ export class ReviewsController {
   @RelaxedThrottle()
   @ApiOperation({
     summary: 'List reviews for a product',
-    description: 'Includes an overall summary: average, total and star distribution.',
+    description:
+      'Includes an overall summary: average, total and star distribution.',
   })
   @ApiParam({ name: 'productId', description: 'Product ID' })
   @ApiOkResponse({ type: PaginatedReviewsDto })

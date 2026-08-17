@@ -1,4 +1,13 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Param, Post, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Param,
+  Post,
+  UseGuards,
+} from '@nestjs/common';
 import { Role } from '@prisma/client';
 import { JwtAuthGuard } from '@/common/guards/jwt-auth.guard';
 import { RolesGuard } from '@/common/guards/roles.guard';
@@ -12,7 +21,17 @@ import {
   PaymentApiResponseDto,
 } from '@/modules/payments/dto/payment-response.dto';
 import { ConfirmPaymentDto } from '@/modules/payments/dto/confirm-payment.dto';
-import { ApiBadRequestResponse, ApiBearerAuth, ApiCreatedResponse, ApiNotFoundResponse, ApiOkResponse, ApiOperation, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger';
+import {
+  ApiBadRequestResponse,
+  ApiBearerAuth,
+  ApiCreatedResponse,
+  ApiNotFoundResponse,
+  ApiOkResponse,
+  ApiOperation,
+  ApiParam,
+  ApiResponse,
+  ApiTags,
+} from '@nestjs/swagger';
 
 @Controller('payments')
 @UseGuards(JwtAuthGuard)
@@ -78,10 +97,14 @@ export class PaymentsController {
     type: PaymentApiResponseDto,
   })
   @ApiBadRequestResponse({
-    description: 'Payment is not refundable, or the amount exceeds what is left',
+    description:
+      'Payment is not refundable, or the amount exceeds what is left',
   })
   @ApiNotFoundResponse({ description: 'Payment not found' })
-  async refund(@Param('id') id: string, @Body() refundPaymentDto: RefundPaymentDto) {
+  async refund(
+    @Param('id') id: string,
+    @Body() refundPaymentDto: RefundPaymentDto,
+  ) {
     return await this.paymentsService.refund(id, refundPaymentDto);
   }
 

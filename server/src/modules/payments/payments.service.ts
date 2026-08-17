@@ -12,7 +12,10 @@ import { OrderStatus, Payment, PaymentStatus, Prisma } from '@prisma/client';
 import { ConfirmPaymentDto } from '@/modules/payments/dto/confirm-payment.dto';
 import { PaymentResponseDto } from '@/modules/payments/dto/payment-response.dto';
 import { MailService } from '@/modules/mail/mail.service';
-import { orderConfirmationEmail, refundIssuedEmail } from '@/modules/mail/mail.templates';
+import {
+  orderConfirmationEmail,
+  refundIssuedEmail,
+} from '@/modules/mail/mail.templates';
 import { RefundPaymentDto } from '@/modules/payments/dto/refund-payment.dto';
 import { frontendUrl } from '@/modules/auth/auth.constants';
 
@@ -42,9 +45,9 @@ export class PaymentsService {
     const { orderId, currency = 'usd' } = createPaymentIntentDto;
 
     const order = await this.prisma.order.findFirst({
-      where: { 
-        id: orderId, 
-        userId: userId
+      where: {
+        id: orderId,
+        userId: userId,
       },
     });
 
@@ -57,7 +60,9 @@ export class PaymentsService {
     });
 
     if (existingPayment && existingPayment.status === PaymentStatus.COMPLETED) {
-      throw new BadRequestException('Đơn hàng này đã được thanh toán thành công trước đó');
+      throw new BadRequestException(
+        'Đơn hàng này đã được thanh toán thành công trước đó',
+      );
     }
 
     const amountInCents = Math.round(Number(order.totalAmount) * 100);
@@ -67,11 +72,13 @@ export class PaymentsService {
       const paymentIntent = await this.stripe.paymentIntents.create({
         amount: amountInCents,
         currency: currency,
-        metadata: { 
-          orderId: order.id, 
-          userId: userId 
+        metadata: {
+          orderId: order.id,
+          userId: userId,
         },
-        description: createPaymentIntentDto.description || `Thanh toán đơn hàng #${order.id}`,
+        description:
+          createPaymentIntentDto.description ||
+          `Thanh toán đơn hàng #${order.id}`,
       });
 
       const payment = await this.prisma.payment.upsert({
@@ -169,14 +176,19 @@ export class PaymentsService {
       throw new BadRequestException('Only a completed payment can be refunded');
     }
     if (!payment.transactionId) {
-      throw new BadRequestException('This payment has no Stripe transaction to refund');
+      throw new BadRequestException(
+        'This payment has no Stripe transaction to refund',
+      );
     }
 
     const alreadyRefunded = Number(payment.refundedAmount);
-    const outstanding = Math.round((Number(payment.amount) - alreadyRefunded) * 100) / 100;
+    const outstanding =
+      Math.round((Number(payment.amount) - alreadyRefunded) * 100) / 100;
 
     if (outstanding <= 0) {
-      throw new BadRequestException('This payment has already been fully refunded');
+      throw new BadRequestException(
+        'This payment has already been fully refunded',
+      );
     }
 
     const amount = dto.amount ?? outstanding;
@@ -193,7 +205,9 @@ export class PaymentsService {
         metadata: { orderId: payment.orderId, reason: dto.reason ?? '' },
       });
     } catch (error) {
-      throw new BadRequestException(`Stripe refused the refund: ${error.message}`);
+      throw new BadRequestException(
+        `Stripe refused the refund: ${error.message}`,
+      );
     }
 
     const totalRefunded = Math.round((alreadyRefunded + amount) * 100) / 100;
@@ -286,7 +300,9 @@ export class PaymentsService {
 
       await this.mailService.send({ to: order.user.email, ...template });
     } catch (error) {
-      this.logger.error(`Could not send refund email for order ${orderId}: ${error.message}`);
+      this.logger.error(
+        `Could not send refund email for order ${orderId}: ${error.message}`,
+      );
     }
   }
 
@@ -327,22 +343,18 @@ export class PaymentsService {
 
     switch (event.type) {
       case 'payment_intent.succeeded':
-        await this.onPaymentIntentSucceeded(
-          event.data.object as Stripe.PaymentIntent,
-        );
+        await this.onPaymentIntentSucceeded(event.data.object);
         break;
 
       case 'payment_intent.payment_failed':
-        await this.onPaymentIntentFailed(
-          event.data.object as Stripe.PaymentIntent,
-        );
+        await this.onPaymentIntentFailed(event.data.object);
         break;
 
       // Fires for refunds issued straight from the Stripe dashboard, which
       // never touch our refund endpoint. Without this the shop would keep
       // showing the order as paid.
       case 'charge.refunded':
-        await this.onChargeRefunded(event.data.object as Stripe.Charge);
+        await this.onChargeRefunded(event.data.object);
         break;
 
       default:
@@ -444,45 +456,47 @@ export class PaymentsService {
     paymentId: string,
     orderId: string,
   ): Promise<Payment> {
-    const { payment, wasFulfilled } = await this.prisma.$transaction(async (tx) => {
-      const order = await tx.order.findUnique({ where: { id: orderId } });
+    const { payment, wasFulfilled } = await this.prisma.$transaction(
+      async (tx) => {
+        const order = await tx.order.findUnique({ where: { id: orderId } });
 
-      if (!order) {
-        throw new NotFoundException(`Order with ID ${orderId} not found`);
-      }
+        if (!order) {
+          throw new NotFoundException(`Order with ID ${orderId} not found`);
+        }
 
-      const updatedPayment = await tx.payment.update({
-        where: { id: paymentId },
-        data: { status: PaymentStatus.COMPLETED },
-      });
-
-      if (order.status === OrderStatus.CANCELLED) {
-        // The customer was charged for an order we already released. Recorded as
-        // paid so it surfaces in the admin list and can be refunded manually.
-        this.logger.error(
-          `Order ${orderId} was CANCELLED before payment ${paymentId} succeeded — the customer was charged and needs a refund.`,
-        );
-        // Explicitly NOT fulfilled: sending "thanks for your order" here would
-        // promise a delivery that is never coming.
-        return { payment: updatedPayment, wasFulfilled: false };
-      }
-
-      if (order.status === OrderStatus.PENDING) {
-        await tx.order.update({
-          where: { id: orderId },
-          data: { status: OrderStatus.PROCESSING },
+        const updatedPayment = await tx.payment.update({
+          where: { id: paymentId },
+          data: { status: PaymentStatus.COMPLETED },
         });
-      }
 
-      if (order.cartId) {
-        await tx.cart.update({
-          where: { id: order.cartId },
-          data: { checkedOut: true },
-        });
-      }
+        if (order.status === OrderStatus.CANCELLED) {
+          // The customer was charged for an order we already released. Recorded as
+          // paid so it surfaces in the admin list and can be refunded manually.
+          this.logger.error(
+            `Order ${orderId} was CANCELLED before payment ${paymentId} succeeded — the customer was charged and needs a refund.`,
+          );
+          // Explicitly NOT fulfilled: sending "thanks for your order" here would
+          // promise a delivery that is never coming.
+          return { payment: updatedPayment, wasFulfilled: false };
+        }
 
-      return { payment: updatedPayment, wasFulfilled: true };
-    });
+        if (order.status === OrderStatus.PENDING) {
+          await tx.order.update({
+            where: { id: orderId },
+            data: { status: OrderStatus.PROCESSING },
+          });
+        }
+
+        if (order.cartId) {
+          await tx.cart.update({
+            where: { id: order.cartId },
+            data: { checkedOut: true },
+          });
+        }
+
+        return { payment: updatedPayment, wasFulfilled: true };
+      },
+    );
 
     if (wasFulfilled) {
       // Sent after the transaction commits, and deliberately not awaited into

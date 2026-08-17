@@ -1,4 +1,4 @@
-import { ApiProperty } from "@nestjs/swagger";
+import { ApiProperty } from '@nestjs/swagger';
 
 export class OrderApiResponseDto<T> {
   @ApiProperty({
@@ -32,7 +32,8 @@ export class OrderItemResponseDto {
 
   @ApiProperty({
     nullable: true,
-    description: 'Variant bought, as it read at purchase time. Null for products without variants.',
+    description:
+      'Variant bought, as it read at purchase time. Null for products without variants.',
     example: 'M / Black',
   })
   variantLabel: string | null;

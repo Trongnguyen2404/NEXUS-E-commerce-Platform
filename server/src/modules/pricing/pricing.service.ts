@@ -1,4 +1,8 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { Coupon, DiscountType, Prisma, ProductVariant } from '@prisma/client';
 import { PrismaService } from '@/prisma/prisma.service';
 
@@ -91,12 +95,18 @@ export class PricingService {
 
     for (const item of items) {
       if (!Number.isInteger(item.quantity) || item.quantity < 1) {
-        throw new BadRequestException('Quantity must be a whole number of at least 1');
+        throw new BadRequestException(
+          'Quantity must be a whole number of at least 1',
+        );
       }
 
-      const product = await tx.product.findUnique({ where: { id: item.productId } });
+      const product = await tx.product.findUnique({
+        where: { id: item.productId },
+      });
       if (!product) {
-        throw new NotFoundException(`Product with ID ${item.productId} not found`);
+        throw new NotFoundException(
+          `Product with ID ${item.productId} not found`,
+        );
       }
       if (!product.isActive) {
         throw new BadRequestException(`${product.name} is no longer available`);
@@ -108,7 +118,9 @@ export class PricingService {
 
       if (product.hasVariants) {
         if (!item.variantId) {
-          throw new BadRequestException(`Choose an option for ${product.name} before ordering`);
+          throw new BadRequestException(
+            `Choose an option for ${product.name} before ordering`,
+          );
         }
 
         variant = await tx.productVariant.findFirst({
@@ -116,19 +128,27 @@ export class PricingService {
         });
 
         if (!variant) {
-          throw new NotFoundException(`That option is no longer available for ${product.name}`);
+          throw new NotFoundException(
+            `That option is no longer available for ${product.name}`,
+          );
         }
         if (!variant.isActive) {
-          throw new BadRequestException(`${product.name} (${variant.label}) is no longer available`);
+          throw new BadRequestException(
+            `${product.name} (${variant.label}) is no longer available`,
+          );
         }
       } else if (item.variantId) {
         // Refusing rather than ignoring: silently dropping it would price a
         // different thing than the customer picked.
-        throw new BadRequestException(`${product.name} does not have options to choose from`);
+        throw new BadRequestException(
+          `${product.name} does not have options to choose from`,
+        );
       }
 
       const availableStock = variant ? variant.stock : product.stock;
-      const displayName = variant ? `${product.name} (${variant.label})` : product.name;
+      const displayName = variant
+        ? `${product.name} (${variant.label})`
+        : product.name;
 
       if (availableStock < item.quantity) {
         throw new BadRequestException(
@@ -177,7 +197,9 @@ export class PricingService {
       shippingFee,
       freeShippingThreshold,
       amountToFreeShipping:
-        shippingFee === 0 ? 0 : money(freeShippingThreshold - discountedSubtotal),
+        shippingFee === 0
+          ? 0
+          : money(freeShippingThreshold - discountedSubtotal),
       taxRate,
       taxAmount,
       total: money(discountedSubtotal + shippingFee + taxAmount),
@@ -227,7 +249,9 @@ export class PricingService {
     const value = Number(coupon.value);
 
     let discount =
-      coupon.type === DiscountType.PERCENT ? money(subtotal * (value / 100)) : money(value);
+      coupon.type === DiscountType.PERCENT
+        ? money(subtotal * (value / 100))
+        : money(value);
 
     // A percentage code can be capped, so "50% off" cannot take $900 off a laptop.
     if (coupon.maxDiscount) {

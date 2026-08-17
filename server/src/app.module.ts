@@ -30,7 +30,7 @@ import { UploadsModule } from '@/modules/uploads/uploads.module';
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: '.env',
-    }), 
+    }),
     ThrottlerModule.forRoot([
       {
         // NOTE: ttl is in MILLISECONDS since @nestjs/throttler v5.
@@ -42,14 +42,25 @@ import { UploadsModule } from '@/modules/uploads/uploads.module';
     MailModule,
     PricingModule,
     HealthModule,
-    AuthModule, UsersModule, CategoryModule, ProductsModule, OrdersModule, CartModule, PaymentsModule, ContactsModule,
-    ReviewsModule, WishlistModule, DashboardModule, AddressesModule, CouponsModule,
-    UploadsModule
+    AuthModule,
+    UsersModule,
+    CategoryModule,
+    ProductsModule,
+    OrdersModule,
+    CartModule,
+    PaymentsModule,
+    ContactsModule,
+    ReviewsModule,
+    WishlistModule,
+    DashboardModule,
+    AddressesModule,
+    CouponsModule,
+    UploadsModule,
   ],
   controllers: [AppController],
   providers: [
     AppService,
-  {
+    {
       provide: APP_GUARD,
       useClass: ThrottlerGuard,
     },

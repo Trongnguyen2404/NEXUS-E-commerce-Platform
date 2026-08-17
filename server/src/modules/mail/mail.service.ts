@@ -73,7 +73,9 @@ export class MailService implements OnModuleInit {
     } catch (error) {
       // No network, or Ethereal is down. The app must still boot.
       this.transporter = null;
-      this.logger.error(`Could not create a test mail account: ${error.message}`);
+      this.logger.error(
+        `Could not create a test mail account: ${error.message}`,
+      );
     }
   }
 
@@ -89,7 +91,9 @@ export class MailService implements OnModuleInit {
     text: string;
   }): Promise<boolean> {
     if (!this.transporter) {
-      this.logger.error(`No mail transport — dropped "${options.subject}" to ${options.to}`);
+      this.logger.error(
+        `No mail transport — dropped "${options.subject}" to ${options.to}`,
+      );
       return false;
     }
 

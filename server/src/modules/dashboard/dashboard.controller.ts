@@ -43,7 +43,8 @@ export class DashboardController {
   @RelaxedThrottle()
   @ApiOperation({
     summary: '[ADMIN] Daily revenue and order counts',
-    description: 'Days without sales are returned as zeroes rather than omitted.',
+    description:
+      'Days without sales are returned as zeroes rather than omitted.',
   })
   @ApiOkResponse({ type: [RevenuePointDto] })
   async revenue(@Query() query: QueryDashboardDto) {

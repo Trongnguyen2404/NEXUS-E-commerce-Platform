@@ -10,7 +10,8 @@ export class ReviewResponseDto {
   @ApiProperty() userId: string;
 
   @ApiProperty({
-    description: 'Reviewer display name. Never the email — that would publish it.',
+    description:
+      'Reviewer display name. Never the email — that would publish it.',
     example: 'John D.',
   })
   authorName: string;
@@ -20,7 +21,10 @@ export class ReviewResponseDto {
 }
 
 export class ReviewSummaryDto {
-  @ApiProperty({ description: 'Mean rating, rounded to one decimal', example: 4.3 })
+  @ApiProperty({
+    description: 'Mean rating, rounded to one decimal',
+    example: 4.3,
+  })
   average: number;
 
   @ApiProperty({ example: 27 })

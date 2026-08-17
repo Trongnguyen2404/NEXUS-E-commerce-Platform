@@ -21,7 +21,8 @@ export class CreateCouponDto {
   // Codes are typed by customers, so keep them unambiguous and case-insensitive
   // (the service uppercases before lookup).
   @Matches(/^[A-Za-z0-9_-]{3,32}$/, {
-    message: 'Code must be 3–32 characters, letters/numbers/dash/underscore only',
+    message:
+      'Code must be 3–32 characters, letters/numbers/dash/underscore only',
   })
   code: string;
 
@@ -29,13 +30,18 @@ export class CreateCouponDto {
   @IsEnum(DiscountType, { message: 'Type must be PERCENT or FIXED' })
   type: DiscountType;
 
-  @ApiProperty({ description: 'PERCENT: 10 = 10%. FIXED: 10 = $10 off.', example: 10 })
+  @ApiProperty({
+    description: 'PERCENT: 10 = 10%. FIXED: 10 = $10 off.',
+    example: 10,
+  })
   @Type(() => Number)
   @IsNumber({ maxDecimalPlaces: 2 })
   @Min(0.01, { message: 'Value must be greater than zero' })
   value: number;
 
-  @ApiPropertyOptional({ description: 'Basket must reach this before the code applies' })
+  @ApiPropertyOptional({
+    description: 'Basket must reach this before the code applies',
+  })
   @IsOptional()
   @Type(() => Number)
   @IsNumber({ maxDecimalPlaces: 2 })
@@ -49,7 +55,9 @@ export class CreateCouponDto {
   @Min(0)
   maxDiscount?: number;
 
-  @ApiPropertyOptional({ description: 'Total redemptions allowed. Omit for unlimited.' })
+  @ApiPropertyOptional({
+    description: 'Total redemptions allowed. Omit for unlimited.',
+  })
   @IsOptional()
   @Type(() => Number)
   @IsInt()

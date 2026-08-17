@@ -1,17 +1,51 @@
-import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
-import { ApiBadRequestResponse, ApiBearerAuth, ApiBody, ApiCreatedResponse, ApiForbiddenResponse, ApiNotFoundResponse, ApiOkResponse, ApiOperation, ApiParam, ApiQuery, ApiResponse, ApiTags, ApiTooManyRequestsResponse, getSchemaPath } from '@nestjs/swagger';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Param,
+  Patch,
+  Post,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
+import {
+  ApiBadRequestResponse,
+  ApiBearerAuth,
+  ApiBody,
+  ApiCreatedResponse,
+  ApiForbiddenResponse,
+  ApiNotFoundResponse,
+  ApiOkResponse,
+  ApiOperation,
+  ApiParam,
+  ApiQuery,
+  ApiResponse,
+  ApiTags,
+  ApiTooManyRequestsResponse,
+  getSchemaPath,
+} from '@nestjs/swagger';
 import { JwtAuthGuard } from '@/common/guards/jwt-auth.guard';
 import { RolesGuard } from '@/common/guards/roles.guard';
 import { OrdersService } from '@/modules/orders/orders.service';
 import { CreateOrderDto } from '@/modules/orders/dto/create-order.dto';
-import { OrderApiResponseDto, OrderResponseDto, PaginatedOrderResponseDto } from '@/modules/orders/dto/order-response.dto';
+import {
+  OrderApiResponseDto,
+  OrderResponseDto,
+  PaginatedOrderResponseDto,
+} from '@/modules/orders/dto/order-response.dto';
 import { GetUser } from '@/common/decorators/get-user.decorator';
 import { Roles } from '@/common/decorators/roles.decorator';
 import { Role } from '@prisma/client';
 import { QueryOrderDto } from '@/modules/orders/dto/query-order.dto';
 import { UpdateOrderDto } from '@/modules/orders/dto/update-order.dto';
 import { UpdateOrderUserDto } from '@/modules/orders/dto/update-order-user.dto';
-import { ModerateThrottle, RelaxedThrottle } from '@/common/decorators/custom-throttler.decorator';
+import {
+  ModerateThrottle,
+  RelaxedThrottle,
+} from '@/common/decorators/custom-throttler.decorator';
 import { QuoteOrderDto } from '@/modules/orders/dto/quote-order.dto';
 import { PricingService } from '@/modules/pricing/pricing.service';
 
@@ -69,7 +103,10 @@ export class OrdersController {
     description: 'Empty basket, insufficient stock, or an invalid promo code',
   })
   async quote(@Body() quoteOrderDto: QuoteOrderDto) {
-    return await this.pricingService.quote(quoteOrderDto.items, quoteOrderDto.couponCode);
+    return await this.pricingService.quote(
+      quoteOrderDto.items,
+      quoteOrderDto.couponCode,
+    );
   }
 
   // Get all orders
