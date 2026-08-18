@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Link } from 'react-router-dom';
-import { ShoppingBag, User, Search, Menu, X, Heart } from 'lucide-react';
+import { ShoppingBag, User, Search, Menu, X, Heart, Loader2 } from 'lucide-react';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
@@ -15,24 +15,35 @@ import Account from './pages/Account';
 import Home from './pages/Home';
 import Categories from './pages/Categories';
 import Contact from './pages/Contact';
-import Checkout from './pages/Checkout';
 import NotFound from './pages/NotFound';
 import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
-import AdminDashboard from './pages/AdminDashboard';
-import AdminProducts from './pages/AdminProducts';
 import AdminRoute from './pages/AdminRoute';
-import AdminCategories from './pages/AdminCategories';
 import AdminMenu from './components/AdminMenu';
-import AdminOrders from './pages/AdminOrders';
-import AdminUsers from './pages/AdminUsers';
-import AdminContacts from './pages/AdminContacts';
-import AdminCoupons from './pages/AdminCoupons';
 import Wishlist from './pages/Wishlist';
 import { useWishlistStore } from './store/useWishlistStore';
 import ProtectedRoute from './components/ProtectedRoute';
 import ErrorBoundary from './components/ErrorBoundary';
+import ScrollToTop from './components/ScrollToTop';
 import Footer from './components/Footer';
+
+// Checkout drags in the whole Stripe SDK and the admin area is seven screens
+// no shopper ever opens. Splitting them keeps the first load to the storefront.
+const Checkout = lazy(() => import('./pages/Checkout'));
+const AdminDashboard = lazy(() => import('./pages/AdminDashboard'));
+const AdminProducts = lazy(() => import('./pages/AdminProducts'));
+const AdminCategories = lazy(() => import('./pages/AdminCategories'));
+const AdminOrders = lazy(() => import('./pages/AdminOrders'));
+const AdminUsers = lazy(() => import('./pages/AdminUsers'));
+const AdminContacts = lazy(() => import('./pages/AdminContacts'));
+const AdminCoupons = lazy(() => import('./pages/AdminCoupons'));
+
+// Shown while a split chunk is on the wire.
+const RouteFallback = () => (
+  <div className="min-h-[60vh] flex items-center justify-center" role="status" aria-label="Loading">
+    <Loader2 className="animate-spin text-black" size={36} />
+  </div>
+);
 
 const NAV_LINKS = [
   { to: '/', label: 'Home' },
@@ -41,6 +52,7 @@ const NAV_LINKS = [
   { to: '/contact', label: 'Contact' },
 ];
 
+// Sticky top bar with navigation and the cart and wishlist counters.
 const Navbar = () => {
   const totalItems = useCartStore((state) => state.totalItems);
   const fetchCart = useCartStore((state) => state.fetchCart);
@@ -51,16 +63,16 @@ const Navbar = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const closeMenu = () => setIsMenuOpen(false);
 
-  // Tự động tải giỏ hàng và wishlist khi người dùng đã đăng nhập (có token)
+  
   useEffect(() => {
-    if (localStorage.getItem('accessToken')) {
-      fetchCart();
-      fetchWishlist();
-    }
-  }, [fetchCart, fetchWishlist]);
+    if (!isAuthenticated) return;
 
-  // data-sticky-top is read by Select: a dropdown that opens upwards stops at
-  // the bottom edge of this bar rather than rendering over it.
+    fetchCart();
+    fetchWishlist();
+  }, [isAuthenticated, fetchCart, fetchWishlist]);
+
+  
+  
   return (
     <nav data-sticky-top className="bg-white border-b border-gray-200 sticky top-0 z-40">
       <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8">
@@ -103,7 +115,7 @@ const Navbar = () => {
               >
                 <Heart size={20} strokeWidth={2} />
                 {savedCount > 0 && (
-                  <span className="absolute -top-2 -right-2 bg-red-500 text-white text-[10px] font-bold h-4 w-4 rounded-full flex items-center justify-center">
+                  <span className="absolute -top-2 -right-2 bg-brand text-white text-[10px] font-bold h-4 w-4 rounded-full flex items-center justify-center">
                     {savedCount}
                   </span>
                 )}
@@ -119,8 +131,6 @@ const Navbar = () => {
               )}
             </Link>
 
-            {/* Nav links are hidden below md, so without this button there is no
-                way to reach Products/Shop/Contact on a phone. */}
             <button
               type="button"
               onClick={() => setIsMenuOpen((open) => !open)}
@@ -137,8 +147,6 @@ const Navbar = () => {
 
       {isMenuOpen && (
         <div id="mobile-menu" className="md:hidden border-t border-gray-100 bg-white">
-          {/* Đóng menu ngay khi bấm link — nếu để useEffect theo pathname thì
-              lint báo cascading render, mà cũng không cần thiết. */}
           <div className="px-4 sm:px-6 py-4 space-y-1">
             {NAV_LINKS.map((link) => (
               <Link
@@ -164,13 +172,16 @@ const Navbar = () => {
   );
 };
 
+// Mounts the router, global layout, error boundary and toast host.
 function App() {
   return (
     <BrowserRouter>
       <ErrorBoundary>
+        <ScrollToTop />
         <div className="min-h-screen bg-white font-sans text-black selection:bg-brand-soft flex flex-col">
           <Navbar />
           <main className="flex-1">
+            <Suspense fallback={<RouteFallback />}>
             <Routes>
               <Route path="/" element={<Home />} />
               <Route path="/login" element={<Login />} />
@@ -184,8 +195,6 @@ function App() {
               <Route path="/products" element={<Products />} />
               <Route path="/products/:id" element={<ProductDetail />} />
 
-              {/* Signed-in users only. Previously these rendered for anyone and
-                  each page had to check localStorage itself. */}
               <Route element={<ProtectedRoute />}>
                 <Route path="/account" element={<Account />} />
                 <Route path="/cart" element={<Cart />} />
@@ -203,9 +212,9 @@ function App() {
                 <Route path="/admin/coupons" element={<AdminCoupons />} />
               </Route>
 
-              {/* Must stay last: matches anything the routes above did not. */}
               <Route path="*" element={<NotFound />} />
             </Routes>
+            </Suspense>
           </main>
           <Footer />
         </div>

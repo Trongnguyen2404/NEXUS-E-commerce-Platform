@@ -7,7 +7,13 @@ import {
 import { PrismaService } from '@/prisma/prisma.service';
 import { CreateProductDto } from '@/modules/products/dto/create-product.dto';
 import { ProductResponseDto } from '@/modules/products/dto/product-response.dto';
-import { Category, Prisma, Product, ProductVariant } from '@prisma/client';
+import {
+  Category,
+  Prisma,
+  Product,
+  ProductImage,
+  ProductVariant,
+} from '@prisma/client';
 import {
   QueryProductDto,
   ProductSort,
@@ -15,6 +21,7 @@ import {
 import { UpdateProductDto } from '@/modules/products/dto/update-product.dto';
 import { ReviewsService } from '@/modules/reviews/reviews.service';
 
+// Product reads and writes, including images, stock and rating joins.
 @Injectable()
 export class ProductsService {
   constructor(
@@ -22,7 +29,7 @@ export class ProductsService {
     private reviewsService: ReviewsService,
   ) {}
 
-  /** Attaches review scores to a page of products in one extra query. */
+  // Attaches review summaries to a batch of products in one query.
   private async withRatings(
     products: (Product & { category: Category; variants: ProductVariant[] })[],
   ): Promise<ProductResponseDto[]> {
@@ -35,7 +42,7 @@ export class ProductsService {
     );
   }
 
-  // Create product
+  // Creates a product, rejecting a duplicate SKU.
   async create(
     createProductDto: CreateProductDto,
   ): Promise<ProductResponseDto> {
@@ -62,16 +69,19 @@ export class ProductsService {
     return this.formatProduct(product);
   }
 
-  // Get all product
-  async findAll(queryDto: QueryProductDto): Promise<{
+  // Lists products, defaulting to active only, with search and filters.
+  // isAdmin comes from the caller's token; the route itself is public.
+  async findAll(
+    queryDto: QueryProductDto,
+    isAdmin = false,
+  ): Promise<{
     data: ProductResponseDto[];
     meta: {
       total: number;
       page: number;
       limit: number;
       totalPages: number;
-      /** Cheapest and dearest product matching everything EXCEPT the price
-       *  filter, so a price slider keeps stable bounds while being dragged. */
+
       priceRange: { min: number; max: number };
     };
   }> {
@@ -87,7 +97,6 @@ export class ProductsService {
       limit = 10,
     } = queryDto;
 
-    // Everything except price. Reused for the price-range aggregate below.
     const baseWhere: Prisma.ProductWhereInput = {};
 
     if (category) {
@@ -112,28 +121,43 @@ export class ProductsService {
       };
     }
 
-    if (isActive !== undefined) {
-      baseWhere.isActive = isActive;
-    }
+    // This endpoint is public, so a client-supplied isActive is only honoured
+    // for an admin; anyone else always gets the storefront view.
+    baseWhere.isActive = isAdmin ? (isActive ?? true) : true;
+
+    // Every narrowing goes through AND so the stock and price filters can each
+    // carry their own OR without overwriting one another.
+    const narrowings: Prisma.ProductWhereInput[] = [];
 
     if (search) {
-      baseWhere.OR = [
-        { name: { contains: search, mode: 'insensitive' } },
-        { description: { contains: search, mode: 'insensitive' } },
-      ];
+      narrowings.push(
+        ...search.split(' ').map(
+          (word): Prisma.ProductWhereInput => ({
+            OR: [
+              { name: { contains: word, mode: 'insensitive' } },
+              { description: { contains: word, mode: 'insensitive' } },
+            ],
+          }),
+        ),
+      );
     }
 
     if (inStock) {
-      baseWhere.stock = { gt: 0 };
+      narrowings.push({ OR: ProductsService.inStockWhere() });
+    }
+
+    if (narrowings.length > 0) {
+      baseWhere.AND = narrowings;
     }
 
     const where: Prisma.ProductWhereInput = { ...baseWhere };
 
     if (minPrice !== undefined || maxPrice !== undefined) {
-      where.price = {
+      const range = {
         ...(minPrice !== undefined ? { gte: minPrice } : {}),
         ...(maxPrice !== undefined ? { lte: maxPrice } : {}),
       };
+      where.AND = [...narrowings, { OR: ProductsService.priceWhere(range) }];
     }
 
     const [total, products, bounds] = await Promise.all([
@@ -170,12 +194,46 @@ export class ProductsService {
     };
   }
 
-  /**
-   * `popular` sorts by review count, which Prisma can do natively on a
-   * relation. Sorting by AVERAGE rating is deliberately absent: Prisma cannot
-   * order by an aggregate of a relation, and faking it in memory would break
-   * pagination. That needs a denormalised column on Product first.
-   */
+  // Availability lives on the active variants once a product sells in them:
+  // nothing maintains products.stock after that, and formatProduct reports the
+  // variant total, so filtering the column would contradict the response.
+  private static inStockWhere(): Prisma.ProductWhereInput[] {
+    return [
+      { hasVariants: false, stock: { gt: 0 } },
+      {
+        hasVariants: true,
+        variants: { some: { isActive: true, stock: { gt: 0 } } },
+      },
+    ];
+  }
+
+  // Same split for price. The base column still appears on the variant
+  // branches because a variant with a null price inherits it, and because a
+  // product whose variants are all retired falls back to it.
+  private static priceWhere(range: {
+    gte?: number;
+    lte?: number;
+  }): Prisma.ProductWhereInput[] {
+    return [
+      { hasVariants: false, price: range },
+      {
+        hasVariants: true,
+        variants: { some: { isActive: true, price: range } },
+      },
+      {
+        hasVariants: true,
+        price: range,
+        variants: { some: { isActive: true, price: null } },
+      },
+      {
+        hasVariants: true,
+        price: range,
+        variants: { none: { isActive: true } },
+      },
+    ];
+  }
+
+  // Translates the sort key into a Prisma order clause.
   private buildOrderBy(
     sort: ProductSort,
   ): Prisma.ProductOrderByWithRelationInput {
@@ -198,13 +256,14 @@ export class ProductsService {
     }
   }
 
-  // Get product by id
+  // Loads one product with its variants and rating.
   async findOne(id: string): Promise<ProductResponseDto> {
     const product = await this.prisma.product.findUnique({
       where: { id },
       include: {
         category: true,
         variants: true,
+        images: { orderBy: { position: 'asc' } },
       },
     });
     if (!product) {
@@ -214,7 +273,33 @@ export class ProductsService {
     return (await this.withRatings([product]))[0];
   }
 
-  // Update product
+  // Replaces a product's images in one transaction, keeping the first as cover.
+  async setImages(id: string, urls: string[]): Promise<ProductResponseDto> {
+    const product = await this.prisma.product.findUnique({
+      where: { id },
+      select: { id: true },
+    });
+
+    if (!product) {
+      throw new NotFoundException('Product not found');
+    }
+
+    await this.prisma.$transaction([
+      this.prisma.productImage.deleteMany({ where: { productId: id } }),
+      this.prisma.productImage.createMany({
+        data: urls.map((url, position) => ({ productId: id, url, position })),
+      }),
+
+      this.prisma.product.update({
+        where: { id },
+        data: { imageUrl: urls[0] ?? null },
+      }),
+    ]);
+
+    return await this.findOne(id);
+  }
+
+  // Updates a product.
   async update(
     id: string,
     updateProductDto: UpdateProductDto,
@@ -256,7 +341,7 @@ export class ProductsService {
     return (await this.withRatings([updatedProduct]))[0];
   }
 
-  // Update product stock
+  // Adds to or subtracts from a product's stock.
   async updateStock(id: string, quantity: number): Promise<ProductResponseDto> {
     if (quantity < 0) {
       const result = await this.prisma.product.updateMany({
@@ -301,7 +386,7 @@ export class ProductsService {
     return (await this.withRatings([updatedProduct!]))[0];
   }
 
-  // Remove a product
+  // Deletes a product.
   async remove(id: string): Promise<{ message: string }> {
     const product = await this.prisma.product.findUnique({
       where: { id },
@@ -321,15 +406,27 @@ export class ProductsService {
       );
     }
 
-    await this.prisma.product.delete({
-      where: { id },
+    // CartItem.product restricts the delete instead of cascading like the
+    // wishlist and image rows do, so a line in someone's basket would fail the
+    // delete with a foreign-key error reported as "might be in an order".
+    await this.prisma.$transaction(async (tx) => {
+      if (product.cartItems.length > 0) {
+        await tx.cartItem.deleteMany({ where: { productId: id } });
+      }
+
+      await tx.product.delete({ where: { id } });
     });
 
     return { message: 'Product deleted successfully' };
   }
 
+  // Shapes a product row into its API response.
   private formatProduct(
-    product: Product & { category: Category; variants?: ProductVariant[] },
+    product: Product & {
+      category: Category;
+      variants?: ProductVariant[];
+      images?: ProductImage[];
+    },
     rating?: { average: number; total: number },
   ): ProductResponseDto {
     const variants = product.variants ?? [];
@@ -337,10 +434,13 @@ export class ProductsService {
 
     return {
       ...product,
-      // For a variant product the headline figures are derived: the price
-      // shown is the cheapest option ("from $X"), and stock is what is
-      // actually buyable across the active options. The product's own
-      // columns are stale once variants exist.
+
+      images: product.images
+        ? product.images.map((image) => image.url)
+        : product.imageUrl
+          ? [product.imageUrl]
+          : [],
+
       price:
         product.hasVariants && activeVariants.length > 0
           ? Math.min(
@@ -363,8 +463,7 @@ export class ProductsService {
         isActive: variant.isActive,
       })),
       category: product.category.name,
-      // Zero rather than null so the client can render stars without a
-      // null check on every card.
+
       rating: rating?.average ?? 0,
       reviewCount: rating?.total ?? 0,
     };

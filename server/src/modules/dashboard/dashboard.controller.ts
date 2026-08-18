@@ -20,15 +20,17 @@ import {
   TopProductDto,
 } from '@/modules/dashboard/dto/dashboard-response.dto';
 
+// Admin-only endpoints feeding the dashboard charts.
 @ApiTags('dashboard')
 @ApiBearerAuth('JWT-auth')
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(Role.ADMIN) // Applies to every route below — this is business data.
+@Roles(Role.ADMIN)
 @ApiForbiddenResponse({ description: 'Admin access required' })
 @Controller('admin/dashboard')
 export class DashboardController {
   constructor(private readonly dashboardService: DashboardService) {}
 
+  // Returns the headline metrics with their period-on-period change.
   @Get('overview')
   @RelaxedThrottle()
   @ApiOperation({
@@ -39,6 +41,7 @@ export class DashboardController {
     return await this.dashboardService.getOverview(query.days);
   }
 
+  // Returns revenue per day for the requested window.
   @Get('revenue')
   @RelaxedThrottle()
   @ApiOperation({
@@ -51,6 +54,7 @@ export class DashboardController {
     return await this.dashboardService.getRevenueSeries(query.days);
   }
 
+  // Returns the best selling products for the window.
   @Get('top-products')
   @RelaxedThrottle()
   @ApiOperation({ summary: '[ADMIN] Best selling products by revenue' })
@@ -59,6 +63,7 @@ export class DashboardController {
     return await this.dashboardService.getTopProducts(query.days, query.limit);
   }
 
+  // Returns how many orders sit in each status.
   @Get('order-status')
   @RelaxedThrottle()
   @ApiOperation({ summary: '[ADMIN] How many orders sit in each status' })

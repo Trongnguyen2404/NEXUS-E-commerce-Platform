@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   Injectable,
   InternalServerErrorException,
   Logger,
@@ -19,6 +20,50 @@ import {
 import { RefundPaymentDto } from '@/modules/payments/dto/refund-payment.dto';
 import { frontendUrl } from '@/modules/auth/auth.constants';
 
+// Currencies Stripe holds in whole units instead of hundredths.
+const ZERO_DECIMAL_CURRENCIES = new Set([
+  'bif',
+  'clp',
+  'djf',
+  'gnf',
+  'jpy',
+  'kmf',
+  'krw',
+  'mga',
+  'pyg',
+  'rwf',
+  'ugx',
+  'vnd',
+  'vuv',
+  'xaf',
+  'xof',
+  'xpf',
+]);
+
+// The one currency the catalogue is priced in. It is deliberately not something
+// the client can choose: order totals are computed in this currency, so charging
+// the same number in another one either overcharges or — for a zero-decimal
+// currency like vnd — collects a fraction of the total.
+const storeCurrency = (): string =>
+  (process.env.PAYMENT_CURRENCY ?? 'usd').toLowerCase();
+
+// Stripe works in minor units, and how many there are per unit depends on the
+// currency; a flat x100 silently divides a vnd total by a hundred.
+const toMinorUnits = (amount: number, currency: string): number =>
+  ZERO_DECIMAL_CURRENCIES.has(currency)
+    ? Math.round(amount)
+    : Math.round(amount * 100);
+
+const fromMinorUnits = (minorUnits: number, currency: string): number =>
+  ZERO_DECIMAL_CURRENCIES.has(currency)
+    ? Math.round(minorUnits)
+    : Math.round(minorUnits) / 100;
+
+// Rounds an intermediate money value through cents so IEEE 754 drift never
+// reaches a comparison or the database.
+const cents = (amount: number): number => Math.round(amount * 100) / 100;
+
+// Stripe integration: intents, confirmation, refunds and webhook handling.
 @Injectable()
 export class PaymentsService {
   private stripe: Stripe;
@@ -33,7 +78,7 @@ export class PaymentsService {
     });
   }
 
-  // Create payment intent
+  // Opens a Stripe payment intent for an unpaid order.
   async createPaymentIntent(
     userId: string,
     createPaymentIntentDto: CreatePaymentIntentDto,
@@ -42,7 +87,7 @@ export class PaymentsService {
     data: { clientSecret: string; paymentId: string };
     message: string;
   }> {
-    const { orderId, currency = 'usd' } = createPaymentIntentDto;
+    const { orderId } = createPaymentIntentDto;
 
     const order = await this.prisma.order.findFirst({
       where: {
@@ -55,6 +100,15 @@ export class PaymentsService {
       throw new NotFoundException(`Không tìm thấy đơn hàng với ID ${orderId}`);
     }
 
+    // Only a PENDING order is payable. A cancelled one — the expiry cron gets
+    // there after an hour — has already had its stock returned, so an intent
+    // opened against it would take money for goods nobody will ship.
+    if (order.status !== OrderStatus.PENDING) {
+      throw new BadRequestException(
+        `Đơn hàng này không còn ở trạng thái chờ thanh toán (${order.status})`,
+      );
+    }
+
     const existingPayment = await this.prisma.payment.findFirst({
       where: { orderId },
     });
@@ -65,12 +119,24 @@ export class PaymentsService {
       );
     }
 
-    const amountInCents = Math.round(Number(order.totalAmount) * 100);
+    // The refund figures on the row describe the charge that was sent back.
+    // Pointing the same row at a new intent would leave them describing money
+    // that never belonged to it, and the new charge could never be refunded.
+    if (existingPayment && existingPayment.status === PaymentStatus.REFUNDED) {
+      throw new BadRequestException(
+        'Đơn hàng này đã được hoàn tiền, không thể thanh toán lại',
+      );
+    }
+
+    const currency = storeCurrency();
+    const amountInMinorUnits = toMinorUnits(
+      Number(order.totalAmount),
+      currency,
+    );
 
     try {
-      // 4. Tạo Payment Intent phía Stripe
       const paymentIntent = await this.stripe.paymentIntents.create({
-        amount: amountInCents,
+        amount: amountInMinorUnits,
         currency: currency,
         metadata: {
           orderId: order.id,
@@ -87,6 +153,12 @@ export class PaymentsService {
           status: PaymentStatus.PENDING,
           transactionId: paymentIntent.id,
           amount: order.totalAmount,
+          // The row is being repointed at a brand-new charge, so the currency
+          // and every refund figure from the previous attempt must go with it.
+          currency: currency,
+          refundedAmount: 0,
+          refundedAt: null,
+          refundReason: null,
         },
         create: {
           orderId: order.id,
@@ -108,11 +180,11 @@ export class PaymentsService {
         message: 'Tạo yêu cầu thanh toán thành công',
       };
     } catch (error) {
-      // Xử lý lỗi từ phía Stripe hoặc Database
       throw new BadRequestException(`Lỗi khi tạo thanh toán: ${error.message}`);
     }
   }
 
+  // Verifies the intent succeeded, then fulfils the order.
   async confirmPayment(
     userId: string,
     confirmPaymentDto: ConfirmPaymentDto,
@@ -142,31 +214,59 @@ export class PaymentsService {
       throw new BadRequestException('Payment not successful');
     }
 
-    const updatedPayment = await this.fulfillOrder(payment.id, orderId);
+    if (!this.intentMatchesPayment(paymentIntent, payment)) {
+      throw new BadRequestException(
+        'The amount collected does not match this order',
+      );
+    }
+
+    const {
+      payment: updatedPayment,
+      wasFulfilled,
+      orderCancelled,
+    } = await this.fulfillOrder(payment);
+
+    // The money is already captured, so the buyer must be told rather than shown
+    // a success screen for an order that will never ship.
+    if (orderCancelled) {
+      throw new ConflictException(
+        'This order was cancelled before your payment completed; the charge has been refunded',
+      );
+    }
 
     return {
       success: true,
       data: this.mapToPaymentResponse(updatedPayment),
-      message: ' Payment confirmed successfully',
+      message: wasFulfilled
+        ? ' Payment confirmed successfully'
+        : 'Payment was already confirmed',
     };
   }
 
-  /**
-   * Sends money back through Stripe, then reflects it locally.
-   *
-   * Stripe is called FIRST and the database updated after: if the order were
-   * flipped to refunded before the card was actually credited, a Stripe failure
-   * would leave the shop believing it had paid the customer when it had not.
-   * The reverse (Stripe succeeds, our write fails) is recoverable — the webhook
-   * reconciles it.
-   */
+  // True when Stripe collected exactly what this payment row promises.
+  private intentMatchesPayment(
+    intent: Stripe.PaymentIntent,
+    payment: Payment,
+  ): boolean {
+    const expected = toMinorUnits(Number(payment.amount), payment.currency);
+
+    if (intent.amount === expected && intent.currency === payment.currency) {
+      return true;
+    }
+
+    this.logger.error(
+      `Intent ${intent.id} collected ${intent.amount} ${intent.currency} but payment ${payment.id} expects ${expected} ${payment.currency} — not fulfilling`,
+    );
+    return false;
+  }
+
+  // Refunds a payment in full or in part and restocks the order.
   async refund(
     paymentId: string,
     dto: RefundPaymentDto,
   ): Promise<{ success: boolean; data: PaymentResponseDto; message: string }> {
     const payment = await this.prisma.payment.findUnique({
       where: { id: paymentId },
-      include: { order: true },
     });
 
     if (!payment) {
@@ -181,9 +281,9 @@ export class PaymentsService {
       );
     }
 
+    const total = Number(payment.amount);
     const alreadyRefunded = Number(payment.refundedAmount);
-    const outstanding =
-      Math.round((Number(payment.amount) - alreadyRefunded) * 100) / 100;
+    const outstanding = cents(total - alreadyRefunded);
 
     if (outstanding <= 0) {
       throw new BadRequestException(
@@ -198,67 +298,53 @@ export class PaymentsService {
       );
     }
 
+    // Claim the money before Stripe is called, and let the database enforce the
+    // ceiling in the same statement that adds to the balance. Reading the total,
+    // checking it and writing it back as an absolute value lets two concurrent
+    // refunds both pass a stale check and then record only one of the two.
+    const claimed = await this.claimRefundAmount(paymentId, amount, total);
+    const totalRefunded = Number(claimed.refundedAmount);
+    const isFullRefund = totalRefunded >= total;
+
     try {
-      await this.stripe.refunds.create({
-        payment_intent: payment.transactionId,
-        amount: Math.round(amount * 100),
-        metadata: { orderId: payment.orderId, reason: dto.reason ?? '' },
-      });
+      await this.stripe.refunds.create(
+        {
+          payment_intent: payment.transactionId,
+          amount: toMinorUnits(amount, payment.currency),
+          metadata: { orderId: payment.orderId, reason: dto.reason ?? '' },
+        },
+        // Keyed on the balance this refund lands on, so an SDK-level network
+        // retry cannot send the same money twice.
+        {
+          idempotencyKey: `refund-${paymentId}-${toMinorUnits(totalRefunded, payment.currency)}`,
+        },
+      );
     } catch (error) {
+      // Nothing left the account, so hand the claimed balance back rather than
+      // leaving a refund on record that Stripe never made.
+      await this.prisma.payment.update({
+        where: { id: paymentId },
+        data: { refundedAmount: { decrement: amount } },
+      });
+
       throw new BadRequestException(
         `Stripe refused the refund: ${error.message}`,
       );
     }
 
-    const totalRefunded = Math.round((alreadyRefunded + amount) * 100) / 100;
-    const isFullRefund = totalRefunded >= Number(payment.amount);
-
     const updated = await this.prisma.$transaction(async (tx) => {
       const updatedPayment = await tx.payment.update({
         where: { id: paymentId },
         data: {
-          refundedAmount: totalRefunded,
           refundedAt: new Date(),
           refundReason: dto.reason ?? payment.refundReason,
-          // A partial refund leaves the payment COMPLETED — part of the money
-          // is still legitimately ours.
+
           ...(isFullRefund ? { status: PaymentStatus.REFUNDED } : {}),
         },
       });
 
-      if (isFullRefund && payment.order.status !== OrderStatus.CANCELLED) {
-        await tx.order.update({
-          where: { id: payment.orderId },
-          data: { status: OrderStatus.CANCELLED },
-        });
-
-        // Stock only comes back if the goods never left. Once an order is
-        // SHIPPED or DELIVERED the units are gone, and crediting them back
-        // would let the shop oversell.
-        if (
-          payment.order.status === OrderStatus.PENDING ||
-          payment.order.status === OrderStatus.PROCESSING
-        ) {
-          const items = await tx.orderItem.findMany({
-            where: { orderId: payment.orderId },
-          });
-
-          for (const item of items) {
-            // Variant lines return their units to the variant, not the product.
-            if (item.variantId) {
-              await tx.productVariant.update({
-                where: { id: item.variantId },
-                data: { stock: { increment: item.quantity } },
-              });
-              continue;
-            }
-
-            await tx.product.update({
-              where: { id: item.productId },
-              data: { stock: { increment: item.quantity } },
-            });
-          }
-        }
+      if (isFullRefund) {
+        await this.cancelAndRestock(tx, payment.orderId);
       }
 
       return updatedPayment;
@@ -275,10 +361,95 @@ export class PaymentsService {
       data: this.mapToPaymentResponse(updated),
       message: isFullRefund
         ? 'Payment fully refunded and the order cancelled'
-        : `Refunded $${amount.toFixed(2)}; $${(outstanding - amount).toFixed(2)} remains`,
+        : `Refunded $${amount.toFixed(2)}; $${cents(total - totalRefunded).toFixed(2)} remains`,
     };
   }
 
+  // Adds to the refunded balance only if the payment can still take it. The
+  // ceiling lives in the WHERE clause so the check and the write are one
+  // statement the database serialises for us.
+  private async claimRefundAmount(
+    paymentId: string,
+    amount: number,
+    total: number,
+  ): Promise<Payment> {
+    try {
+      return await this.prisma.payment.update({
+        where: {
+          id: paymentId,
+          refundedAmount: { lte: cents(total - amount) },
+        },
+        data: { refundedAmount: { increment: amount } },
+      });
+    } catch {
+      throw new BadRequestException(
+        `Cannot refund $${amount.toFixed(2)} — another refund on this payment got there first`,
+      );
+    }
+  }
+
+  // Cancels an order and returns its stock exactly once, whichever refund route
+  // asked for it. The fresh row inside the transaction decides, never a copy
+  // read before a network call to Stripe.
+  private async cancelAndRestock(
+    tx: Prisma.TransactionClient,
+    orderId: string,
+  ): Promise<void> {
+    const claimed = await tx.order.updateMany({
+      where: {
+        id: orderId,
+        status: { in: [OrderStatus.PENDING, OrderStatus.PROCESSING] },
+      },
+      data: { status: OrderStatus.CANCELLED },
+    });
+
+    if (claimed.count === 0) {
+      // Already cancelled, or shipped and therefore gone from the warehouse:
+      // record the cancellation but do not invent stock.
+      await tx.order.updateMany({
+        where: { id: orderId, status: { not: OrderStatus.CANCELLED } },
+        data: { status: OrderStatus.CANCELLED },
+      });
+      return;
+    }
+
+    // A refund releases the promo code the same way an admin cancel does.
+    // Without this, a limited-use code stayed burned by an order that was
+    // refunded, and the cancel path in OrdersService already gives it back —
+    // two routes to the same end state disagreeing is what caused the leak.
+    const order = await tx.order.findUnique({
+      where: { id: orderId },
+      select: { couponId: true },
+    });
+
+    if (order?.couponId) {
+      // Guarded so a double release can never drive the counter negative.
+      await tx.$executeRaw`
+        UPDATE coupons
+        SET "usedCount" = GREATEST("usedCount" - 1, 0)
+        WHERE id = ${order.couponId}
+      `;
+    }
+
+    const items = await tx.orderItem.findMany({ where: { orderId } });
+
+    for (const item of items) {
+      if (item.variantId) {
+        await tx.productVariant.update({
+          where: { id: item.variantId },
+          data: { stock: { increment: item.quantity } },
+        });
+        continue;
+      }
+
+      await tx.product.update({
+        where: { id: item.productId },
+        data: { stock: { increment: item.quantity } },
+      });
+    }
+  }
+
+  // Emails the customer that a refund was issued.
   private async sendRefundEmail(
     orderId: string,
     amount: number,
@@ -306,11 +477,7 @@ export class PaymentsService {
     }
   }
 
-  /**
-   * Stripe webhook entry point. This — not the browser calling /confirm — is the
-   * source of truth for whether an order was paid: the customer can close the tab
-   * the moment the card is charged, and Stripe still delivers (and retries) here.
-   */
+  // Routes a verified Stripe webhook event to its handler.
   async handleStripeEvent(
     rawBody: Buffer | undefined,
     signature: string | undefined,
@@ -336,7 +503,6 @@ export class PaymentsService {
         webhookSecret,
       );
     } catch (error) {
-      // Anyone can POST here, so an unverifiable payload is simply rejected.
       this.logger.warn(`Rejected webhook: ${error.message}`);
       throw new BadRequestException(`Webhook signature verification failed`);
     }
@@ -350,9 +516,6 @@ export class PaymentsService {
         await this.onPaymentIntentFailed(event.data.object);
         break;
 
-      // Fires for refunds issued straight from the Stripe dashboard, which
-      // never touch our refund endpoint. Without this the shop would keep
-      // showing the order as paid.
       case 'charge.refunded':
         await this.onChargeRefunded(event.data.object);
         break;
@@ -364,6 +527,7 @@ export class PaymentsService {
     return { received: true };
   }
 
+  // Handles the payment_intent.succeeded event.
   private async onPaymentIntentSucceeded(
     paymentIntent: Stripe.PaymentIntent,
   ): Promise<void> {
@@ -372,8 +536,6 @@ export class PaymentsService {
     });
 
     if (!payment) {
-      // Most likely an intent from another environment sharing the same Stripe
-      // account. Acknowledge it so Stripe stops retrying.
       this.logger.warn(
         `No local payment for intent ${paymentIntent.id} — ignoring`,
       );
@@ -381,14 +543,28 @@ export class PaymentsService {
     }
 
     if (payment.status === PaymentStatus.COMPLETED) {
-      return; // Already fulfilled, either by /confirm or an earlier delivery.
+      return;
     }
 
-    await this.fulfillOrder(payment.id, payment.orderId);
-    this.logger.log(`Order ${payment.orderId} fulfilled via Stripe webhook`);
+    if (!this.intentMatchesPayment(paymentIntent, payment)) {
+      return;
+    }
+
+    const { wasFulfilled, orderCancelled } = await this.fulfillOrder(payment);
+
+    if (orderCancelled) {
+      this.logger.warn(
+        `Order ${payment.orderId} was cancelled before its charge landed — the payment was refunded, not banked`,
+      );
+      return;
+    }
+
+    if (wasFulfilled) {
+      this.logger.log(`Order ${payment.orderId} fulfilled via Stripe webhook`);
+    }
   }
 
-  /** Reconciles a refund made outside the app (Stripe dashboard, disputes). */
+  // Handles the charge.refunded event.
   private async onChargeRefunded(charge: Stripe.Charge): Promise<void> {
     const intentId =
       typeof charge.payment_intent === 'string'
@@ -401,33 +577,36 @@ export class PaymentsService {
     });
     if (!payment) return;
 
-    // Stripe reports the authoritative running total in minor units.
-    const refunded = Math.round((charge.amount_refunded / 100) * 100) / 100;
-    if (refunded <= Number(payment.refundedAmount)) return; // Already recorded.
+    // charge.amount_refunded is the running total Stripe holds, so it replaces
+    // our balance rather than adding to it.
+    const refunded = fromMinorUnits(charge.amount_refunded, payment.currency);
+    if (refunded <= Number(payment.refundedAmount)) return;
 
     const isFullRefund = refunded >= Number(payment.amount);
 
-    await this.prisma.payment.update({
-      where: { id: payment.id },
-      data: {
-        refundedAmount: refunded,
-        refundedAt: new Date(),
-        ...(isFullRefund ? { status: PaymentStatus.REFUNDED } : {}),
-      },
-    });
-
-    if (isFullRefund) {
-      await this.prisma.order.update({
-        where: { id: payment.orderId },
-        data: { status: OrderStatus.CANCELLED },
+    await this.prisma.$transaction(async (tx) => {
+      await tx.payment.update({
+        where: { id: payment.id },
+        data: {
+          refundedAmount: refunded,
+          refundedAt: new Date(),
+          ...(isFullRefund ? { status: PaymentStatus.REFUNDED } : {}),
+        },
       });
-    }
+
+      // A refund raised in the Stripe dashboard has to put the stock back too,
+      // otherwise the units are lost with no route left to recover them.
+      if (isFullRefund) {
+        await this.cancelAndRestock(tx, payment.orderId);
+      }
+    });
 
     this.logger.warn(
       `Refund of $${refunded.toFixed(2)} on order ${payment.orderId} came from Stripe, not the admin panel`,
     );
   }
 
+  // Handles the payment_intent.payment_failed event.
   private async onPaymentIntentFailed(
     paymentIntent: Stripe.PaymentIntent,
   ): Promise<void> {
@@ -448,67 +627,121 @@ export class PaymentsService {
     );
   }
 
-  /**
-   * Marks the payment complete and moves the order along. Safe to call twice —
-   * both the webhook and /confirm can reach it for the same payment.
-   */
-  private async fulfillOrder(
-    paymentId: string,
-    orderId: string,
-  ): Promise<Payment> {
-    const { payment, wasFulfilled } = await this.prisma.$transaction(
-      async (tx) => {
-        const order = await tx.order.findUnique({ where: { id: orderId } });
+  // Marks the order paid and records the payment, once.
+  private async fulfillOrder(payment: Payment): Promise<{
+    payment: Payment;
+    wasFulfilled: boolean;
+    orderCancelled: boolean;
+  }> {
+    const orderId = payment.orderId;
 
-        if (!order) {
-          throw new NotFoundException(`Order with ID ${orderId} not found`);
-        }
+    const outcome = await this.prisma.$transaction(async (tx) => {
+      const order = await tx.order.findUnique({ where: { id: orderId } });
 
-        const updatedPayment = await tx.payment.update({
-          where: { id: paymentId },
-          data: { status: PaymentStatus.COMPLETED },
+      if (!order) {
+        throw new NotFoundException(`Order with ID ${orderId} not found`);
+      }
+
+      // Money landed on an order that will never ship. Marking the payment
+      // COMPLETED here would bank it into dashboard revenue and hide the
+      // problem, so the row stays as it is and the charge goes back.
+      if (order.status === OrderStatus.CANCELLED) {
+        return { wasFulfilled: false, orderCancelled: true };
+      }
+
+      // The browser's confirm call and the Stripe webhook race each other.
+      // Whoever moves the row out of "not yet COMPLETED" owns the fulfilment;
+      // the loser must not send a second confirmation email. A plain update
+      // has no such predicate, so both callers used to win.
+      const claimed = await tx.payment.updateMany({
+        where: { id: payment.id, status: { not: PaymentStatus.COMPLETED } },
+        data: { status: PaymentStatus.COMPLETED },
+      });
+
+      if (claimed.count === 0) {
+        return { wasFulfilled: false, orderCancelled: false };
+      }
+
+      if (order.status === OrderStatus.PENDING) {
+        await tx.order.update({
+          where: { id: orderId },
+          data: { status: OrderStatus.PROCESSING },
         });
+      }
 
-        if (order.status === OrderStatus.CANCELLED) {
-          // The customer was charged for an order we already released. Recorded as
-          // paid so it surfaces in the admin list and can be refunded manually.
-          this.logger.error(
-            `Order ${orderId} was CANCELLED before payment ${paymentId} succeeded — the customer was charged and needs a refund.`,
-          );
-          // Explicitly NOT fulfilled: sending "thanks for your order" here would
-          // promise a delivery that is never coming.
-          return { payment: updatedPayment, wasFulfilled: false };
-        }
+      if (order.cartId) {
+        await tx.cart.update({
+          where: { id: order.cartId },
+          data: { checkedOut: true },
+        });
+      }
 
-        if (order.status === OrderStatus.PENDING) {
-          await tx.order.update({
-            where: { id: orderId },
-            data: { status: OrderStatus.PROCESSING },
-          });
-        }
+      return { wasFulfilled: true, orderCancelled: false };
+    });
 
-        if (order.cartId) {
-          await tx.cart.update({
-            where: { id: order.cartId },
-            data: { checkedOut: true },
-          });
-        }
+    if (outcome.orderCancelled) {
+      return {
+        payment: await this.refundUnfulfillableCharge(payment),
+        wasFulfilled: false,
+        orderCancelled: true,
+      };
+    }
 
-        return { payment: updatedPayment, wasFulfilled: true };
-      },
-    );
-
-    if (wasFulfilled) {
-      // Sent after the transaction commits, and deliberately not awaited into
-      // the transaction: a slow SMTP server must never hold a database lock,
-      // and a bounced email must never roll back a paid order.
+    if (outcome.wasFulfilled) {
       void this.sendOrderConfirmation(orderId);
     }
 
-    return payment;
+    // Either this call completed the row or someone else already had.
+    return {
+      payment: { ...payment, status: PaymentStatus.COMPLETED },
+      wasFulfilled: outcome.wasFulfilled,
+      orderCancelled: false,
+    };
   }
 
-  /** Best-effort confirmation email. Never throws into the payment path. */
+  // Sends back a charge collected against an order that was already cancelled.
+  private async refundUnfulfillableCharge(payment: Payment): Promise<Payment> {
+    const reason = 'Order was cancelled before the payment completed';
+
+    this.logger.error(
+      `Order ${payment.orderId} was CANCELLED before payment ${payment.id} succeeded — refunding the charge.`,
+    );
+
+    if (!payment.transactionId) {
+      return payment;
+    }
+
+    try {
+      await this.stripe.refunds.create(
+        {
+          payment_intent: payment.transactionId,
+          metadata: { orderId: payment.orderId, reason },
+        },
+        { idempotencyKey: `cancelled-order-refund-${payment.id}` },
+      );
+    } catch (error) {
+      this.logger.error(
+        `Automatic refund of payment ${payment.id} failed: ${error.message} — it must be refunded by hand`,
+      );
+      return payment;
+    }
+
+    const refunded = await this.prisma.payment.update({
+      where: { id: payment.id },
+      data: {
+        status: PaymentStatus.REFUNDED,
+        refundedAmount: payment.amount,
+        refundedAt: new Date(),
+        refundReason: reason,
+      },
+    });
+
+    void this.sendRefundEmail(payment.orderId, Number(payment.amount), true);
+
+    return refunded;
+  }
+
+  // Emails the order confirmation.
   private async sendOrderConfirmation(orderId: string): Promise<void> {
     try {
       const order = await this.prisma.order.findUnique({
@@ -539,7 +772,7 @@ export class PaymentsService {
     }
   }
 
-  // Get all payments for current user
+  // Lists the caller's payments.
   async findAll(userId: string): Promise<{
     success: boolean;
     data: PaymentResponseDto[];
@@ -557,7 +790,7 @@ export class PaymentsService {
     };
   }
 
-  // Get payment by ID
+  // Loads one payment, scoped to its owner unless the caller is an admin.
   async findOne(
     id: string,
     userId: string,
@@ -581,7 +814,7 @@ export class PaymentsService {
     };
   }
 
-  // Get payment by Order ID
+  // Loads the payment attached to an order.
   async findByOrder(
     orderId: string,
     userId: string,
@@ -601,6 +834,7 @@ export class PaymentsService {
     };
   }
 
+  // Shapes a payment row into its API response.
   private mapToPaymentResponse(payment: {
     id: string;
     orderId: string;

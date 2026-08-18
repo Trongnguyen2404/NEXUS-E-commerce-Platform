@@ -2,6 +2,7 @@ import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import { IsIn, IsInt, IsOptional, Max, Min } from 'class-validator';
 
+// Query string accepted when listing a product's reviews.
 export class QueryReviewsDto {
   @ApiPropertyOptional({ minimum: 1, default: 1 })
   @Type(() => Number)

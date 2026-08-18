@@ -2,34 +2,52 @@ import { useState, useEffect } from 'react';
 import { Loader2, Plus, Trash2, Edit3, X, Box, Layers } from 'lucide-react';
 import { toast } from 'react-toastify';
 import axiosClient, { getErrorMessage } from '../api/axiosClient';
-import ImageUpload from '../components/ImageUpload';
+import ImageGallery from '../components/ImageGallery';
+import { PRODUCT_PLACEHOLDER } from '../components/productPlaceholder';
 import Select from '../components/Select';
 import VariantManager from '../components/VariantManager';
 import type { Category, PageResponse, PaginatedResponse, Product } from '../types/api';
 
+// Admin screen for the product catalogue, images and options.
 const AdminProducts = () => {
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   
-  // Modal States
+  
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null); // NẾU CÓ ID LÀ ĐANG EDIT
+  const [editingId, setEditingId] = useState<string | null>(null); 
   const [managingVariants, setManagingVariants] = useState<Product | null>(null);
   
-  // Form State
-  const [formData, setFormData] = useState({
-    name: '', sku: '', price: '', stock: '', categoryId: '', imageUrl: '', description: ''
-  });
+  
+  const EMPTY_FORM = { name: '', sku: '', price: '', stock: '', categoryId: '', description: '', images: [] as string[] };
+  const [formData, setFormData] = useState(EMPTY_FORM);
+
+  // True while editing a product whose price and stock are owned by its
+  // variants. The list endpoint DERIVES those two fields for such products
+  // (price = cheapest active variant, stock = summed variant stock), so the
+  // value in the form is a read-only summary — sending it back would write the
+  // cheapest variant's price into the base column and silently re-price every
+  // variant that inherits it.
+  const [variantPriced, setVariantPriced] = useState(false);
+
+  // Set once the admin types their own SKU. The old guard tested whether the
+  // SKU contained a dash, but every auto-generated multi-word SKU does, so the
+  // very first space froze it: "Nexus Widget Pro" stayed NEXUS-WIDGET.
+  const [skuTouched, setSkuTouched] = useState(false);
 
   const fetchData = async () => {
     try {
-      const [prodRes, catRes] = await Promise.all([
+      
+      
+      
+      const [live, hidden, catRes] = await Promise.all([
         axiosClient.get<PaginatedResponse<Product>>('/products', { params: { limit: 100 } }),
+        axiosClient.get<PaginatedResponse<Product>>('/products', { params: { limit: 100, isActive: false } }),
         axiosClient.get<PageResponse<Category>>('/categories')
       ]);
-      setProducts(prodRes?.data || []);
+      setProducts([...(live?.data ?? []), ...(hidden?.data ?? [])]);
       setCategories(Array.isArray(catRes?.data) ? catRes.data : []);
     } catch (e) {
       toast.error(getErrorMessage(e, 'Error loading data'));
@@ -40,13 +58,12 @@ const AdminProducts = () => {
 
   useEffect(() => { fetchData(); }, []);
 
-  // Auto SKU
+  
   useEffect(() => {
-    if (!editingId && formData.name && !formData.sku.includes('-')) {
-      const autoSku = formData.name.toUpperCase().replace(/[^A-Z0-9\s]/g, '').replace(/\s+/g, '-');
-      setFormData(prev => ({ ...prev, sku: autoSku }));
-    }
-  }, [formData.name, editingId]);
+    if (editingId || skuTouched || !formData.name) return;
+    const autoSku = formData.name.toUpperCase().replace(/[^A-Z0-9\s]/g, '').trim().replace(/\s+/g, '-');
+    setFormData(prev => (prev.sku === autoSku ? prev : { ...prev, sku: autoSku }));
+  }, [formData.name, editingId, skuTouched]);
 
   const handleDelete = async (id: string) => {
     if (!window.confirm('Delete this product permanently?')) return;
@@ -59,51 +76,72 @@ const AdminProducts = () => {
     }
   };
 
-  // MỞ FORM EDIT: Đổ dữ liệu cũ vào Form
-  const openEditModal = (product: Product) => {
+  
+  const openEditModal = async (product: Product) => {
     setEditingId(product.id);
+    setSkuTouched(true);
+    setVariantPriced(product.hasVariants);
     setFormData({
       name: product.name || '',
       sku: product.sku || '',
       price: product.price ? String(product.price) : '',
       stock: product.stock !== undefined ? String(product.stock) : '',
-      categoryId: product.categoryId || '', // Lấy ID danh mục
-      imageUrl: product.imageUrl || '',
-      description: product.description || ''
+      categoryId: product.categoryId || '', 
+      description: product.description || '',
+      images: product.imageUrl ? [product.imageUrl] : [],
     });
     setIsModalOpen(true);
+
+    
+    
+    
+    try {
+      const full = await axiosClient.get<Product>(`/products/${product.id}`);
+      setFormData((prev) => ({ ...prev, images: full.images ?? [] }));
+    } catch {
+      toast.error('Could not load the full gallery — close and reopen before saving, or you will lose the other images.');
+    }
   };
 
-  // MỞ FORM CREATE: Xóa trắng Form
+  
   const openCreateModal = () => {
     setEditingId(null);
-    setFormData({ name: '', sku: '', price: '', stock: '', categoryId: '', imageUrl: '', description: '' });
+    setFormData(EMPTY_FORM);
+    setSkuTouched(false);
+    setVariantPriced(false);
     setIsModalOpen(true);
   };
 
-  // XỬ LÝ SUBMIT (Gộp cả CREATE và UPDATE)
+  
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.categoryId) { toast.error("Please select a category!"); return; }
 
     setIsSubmitting(true);
     try {
+      
+      
+      const { images, price, stock, ...productFields } = formData;
       const payload = {
-        ...formData,
-        price: Number(formData.price),
-        stock: Number(formData.stock),
+        ...productFields,
+        // Omitted entirely for a variant product: the form only ever held the
+        // derived summary, and PATCHing it back would overwrite the base price
+        // every inheriting variant is priced from.
+        ...(variantPriced ? {} : { price: Number(price), stock: Number(stock) }),
       };
 
+      let productId = editingId;
+
       if (editingId) {
-        // GỌI API UPDATE
         await axiosClient.patch(`/products/${editingId}`, payload);
-        toast.success('Product updated successfully!');
       } else {
-        // GỌI API CREATE
-        await axiosClient.post('/products', payload);
-        toast.success('Product created successfully!');
+        productId = (await axiosClient.post<Product>('/products', payload)).id;
       }
 
+      
+      await axiosClient.put(`/products/${productId}/images`, { urls: images });
+
+      toast.success(editingId ? 'Product updated successfully!' : 'Product created successfully!');
       setIsModalOpen(false);
       fetchData();
     } catch (err) {
@@ -119,7 +157,6 @@ const AdminProducts = () => {
     <div className="min-h-screen bg-[#EDEDF0] py-12 px-4 sm:px-8">
       <div className="max-w-[1400px] mx-auto">
         
-        {/* HEADER */}
         <div className="bg-white rounded-[2rem] p-8 sm:p-10 mb-8 border border-gray-300 shadow-sm flex flex-col sm:flex-row justify-between items-start sm:items-end gap-6">
           <div>
             <h1 className="text-4xl sm:text-5xl font-black uppercase tracking-tighter text-black">Inventory</h1>
@@ -133,7 +170,6 @@ const AdminProducts = () => {
           </button>
         </div>
 
-        {/* BẢNG SẢN PHẨM */}
         <div className="bg-white rounded-[2.5rem] p-6 sm:p-10 border border-gray-300 shadow-sm overflow-x-auto">
           <table className="w-full text-left border-collapse min-w-[800px]">
             <thead>
@@ -151,9 +187,21 @@ const AdminProducts = () => {
                 <tr key={p.id} className="hover:bg-[#F5F5F7] transition-all">
                   <td className="py-4 px-4 flex items-center space-x-4">
                     <div className="w-14 h-14 bg-white rounded-xl border border-gray-200 p-2 flex items-center justify-center shrink-0">
-                      <img src={p.imageUrl ?? ''} alt="" className="max-w-full max-h-full object-contain brightness-[1.02] contrast-[1.05]" />
+                      <img
+                        src={p.imageUrl || PRODUCT_PLACEHOLDER}
+                        alt=""
+                        className={`max-w-full max-h-full object-contain brightness-[1.02] contrast-[1.05] ${p.isActive ? '' : 'grayscale opacity-60'}`}
+                        onError={(e) => { e.currentTarget.src = PRODUCT_PLACEHOLDER; }}
+                      />
                     </div>
-                    <span className="font-bold text-sm uppercase text-black max-w-[200px] truncate">{p.name}</span>
+                    <div className="min-w-0">
+                      <span className="block font-bold text-sm uppercase text-black max-w-[200px] truncate">{p.name}</span>
+                      {!p.isActive && (
+                        <span className="inline-block mt-1 text-[9px] font-black uppercase tracking-widest bg-state-neutral-soft text-state-neutral px-2 py-0.5 rounded">
+                          Hidden
+                        </span>
+                      )}
+                    </div>
                   </td>
                   <td className="py-4 px-4 text-xs font-bold text-gray-500">{p.sku}</td>
                   <td className="py-4 px-4">
@@ -170,7 +218,6 @@ const AdminProducts = () => {
                   </td>
                   <td className="py-4 px-4 text-right font-black text-sm text-black">${Number(p.price).toFixed(2)}</td>
                   <td className="py-4 px-4 text-right space-x-2 whitespace-nowrap">
-                    {/* NÚT OPTIONS (biến thể) */}
                     <button
                       onClick={() => setManagingVariants(p)}
                       title={p.hasVariants ? `${p.variants.length} options` : 'Add options'}
@@ -182,11 +229,9 @@ const AdminProducts = () => {
                     >
                       <Layers size={16} />
                     </button>
-                    {/* NÚT EDIT */}
                     <button onClick={() => openEditModal(p)} className="p-3 bg-[#F5F5F7] text-gray-600 hover:bg-black hover:text-white rounded-xl transition-colors">
                       <Edit3 size={16} />
                     </button>
-                    {/* NÚT XÓA */}
                     <button onClick={() => handleDelete(p.id)} className="p-3 bg-state-danger-soft text-state-danger hover:bg-state-danger hover:text-white rounded-xl transition-colors">
                       <Trash2 size={16} />
                     </button>
@@ -198,7 +243,6 @@ const AdminProducts = () => {
         </div>
       </div>
 
-      {/* MODAL THÊM / SỬA SẢN PHẨM */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setIsModalOpen(false)}></div>
@@ -209,26 +253,23 @@ const AdminProducts = () => {
                 <Box className="text-black" size={24} />
                 <h2 className="text-2xl font-black uppercase tracking-tight text-black">{editingId ? 'Edit Product' : 'Create Product'}</h2>
               </div>
-              <button onClick={() => setIsModalOpen(false)} className="p-2 bg-gray-200 hover:bg-red-500 hover:text-white rounded-full transition-colors"><X size={20} /></button>
+              <button onClick={() => setIsModalOpen(false)} className="p-2 bg-gray-200 hover:bg-state-danger hover:text-white rounded-full transition-colors"><X size={20} /></button>
             </div>
 
             <div className="p-8 overflow-y-auto">
               <form id="product-form" onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-12 gap-8">
-                {/* Các Input (Giữ nguyên như cũ) */}
                 <div className="md:col-span-8 space-y-6">
                   <div className="space-y-2">
-                    <label className="text-[10px] font-black uppercase text-gray-500 tracking-widest">Product Name <span className="text-red-500">*</span></label>
+                    <label className="text-[10px] font-black uppercase text-gray-500 tracking-widest">Product Name <span className="text-state-danger">*</span></label>
                     <input required type="text" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className="w-full bg-[#F5F5F7] border-2 border-transparent focus:border-black rounded-2xl p-4 text-sm font-bold text-black outline-none transition-all" />
                   </div>
                   <div className="grid grid-cols-2 gap-6">
                     <div className="space-y-2">
-                      <label className="text-[10px] font-black uppercase text-gray-500 tracking-widest">SKU Code <span className="text-red-500">*</span></label>
-                      <input required type="text" value={formData.sku} onChange={e => setFormData({...formData, sku: e.target.value})} className="w-full bg-[#F5F5F7] border-2 border-transparent focus:border-black rounded-2xl p-4 text-sm font-bold text-black outline-none transition-all" />
+                      <label className="text-[10px] font-black uppercase text-gray-500 tracking-widest">SKU Code <span className="text-state-danger">*</span></label>
+                      <input required type="text" value={formData.sku} onChange={e => { setSkuTouched(true); setFormData({...formData, sku: e.target.value}); }} className="w-full bg-[#F5F5F7] border-2 border-transparent focus:border-black rounded-2xl p-4 text-sm font-bold text-black outline-none transition-all" />
                     </div>
                     <div className="space-y-2">
-                      <label className="text-[10px] font-black uppercase text-gray-500 tracking-widest">Category <span className="text-red-500">*</span></label>
-                      {/* No `required` to lean on now that this is not a native
-                          control — handleSubmit already refuses an empty one. */}
+                      <label className="text-[10px] font-black uppercase text-gray-500 tracking-widest">Category <span className="text-state-danger">*</span></label>
                       <Select
                         value={formData.categoryId}
                         onChange={(next) => setFormData({ ...formData, categoryId: next })}
@@ -241,26 +282,34 @@ const AdminProducts = () => {
                   </div>
                   <div className="grid grid-cols-2 gap-6">
                     <div className="space-y-2">
-                      <label className="text-[10px] font-black uppercase text-gray-500 tracking-widest">Price ($) <span className="text-red-500">*</span></label>
-                      <input required type="number" step="0.01" min="0" value={formData.price} onChange={e => setFormData({...formData, price: e.target.value})} className="w-full bg-[#F5F5F7] border-2 border-transparent focus:border-black rounded-2xl p-4 text-sm font-bold text-black outline-none transition-all" />
+                      <label htmlFor="product-price" className="text-[10px] font-black uppercase text-gray-500 tracking-widest">
+                        Price ($) {!variantPriced && <span className="text-state-danger">*</span>}
+                      </label>
+                      <input id="product-price" required={!variantPriced} disabled={variantPriced} type="number" step="0.01" min="0" value={formData.price} onChange={e => setFormData({...formData, price: e.target.value})} className="w-full bg-[#F5F5F7] border-2 border-transparent focus:border-black rounded-2xl p-4 text-sm font-bold text-black outline-none transition-all disabled:text-gray-400 disabled:cursor-not-allowed" />
                     </div>
                     <div className="space-y-2">
-                      <label className="text-[10px] font-black uppercase text-gray-500 tracking-widest">Stock <span className="text-red-500">*</span></label>
-                      <input required type="number" min="0" value={formData.stock} onChange={e => setFormData({...formData, stock: e.target.value})} className="w-full bg-[#F5F5F7] border-2 border-transparent focus:border-black rounded-2xl p-4 text-sm font-bold text-black outline-none transition-all" />
+                      <label htmlFor="product-stock" className="text-[10px] font-black uppercase text-gray-500 tracking-widest">
+                        Stock {!variantPriced && <span className="text-state-danger">*</span>}
+                      </label>
+                      <input id="product-stock" required={!variantPriced} disabled={variantPriced} type="number" min="0" value={formData.stock} onChange={e => setFormData({...formData, stock: e.target.value})} className="w-full bg-[#F5F5F7] border-2 border-transparent focus:border-black rounded-2xl p-4 text-sm font-bold text-black outline-none transition-all disabled:text-gray-400 disabled:cursor-not-allowed" />
                     </div>
+                    {variantPriced && (
+                      <p className="col-span-2 -mt-2 text-[10px] font-bold uppercase tracking-widest text-gray-500">
+                        Price and stock come from this product's options — edit them under Options.
+                      </p>
+                    )}
                   </div>
                   <div className="space-y-2">
-                    <label className="text-[10px] font-black uppercase text-gray-500 tracking-widest">Description</label>
-                    <textarea value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} className="w-full bg-[#F5F5F7] border-2 border-transparent focus:border-black rounded-2xl p-4 text-sm font-bold text-black outline-none h-28 resize-none" />
+                    <label htmlFor="product-description" className="text-[10px] font-black uppercase text-gray-500 tracking-widest">Description</label>
+                    <textarea id="product-description" value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} className="w-full bg-[#F5F5F7] border-2 border-transparent focus:border-black rounded-2xl p-4 text-sm font-bold text-black outline-none h-28 resize-none" />
                   </div>
                 </div>
 
                 <div className="md:col-span-4">
-                  <ImageUpload
-                    value={formData.imageUrl}
-                    onChange={(url) => setFormData({ ...formData, imageUrl: url })}
+                  <ImageGallery
+                    value={formData.images}
+                    onChange={(images) => setFormData({ ...formData, images })}
                     folder="products"
-                    label="Product image"
                   />
                 </div>
               </form>
@@ -282,8 +331,8 @@ const AdminProducts = () => {
           productName={managingVariants.name}
           basePrice={managingVariants.price}
           onClose={() => setManagingVariants(null)}
-          // Variants change the product's reported price and stock, so the
-          // table behind the modal has to be refetched.
+          
+          
           onChanged={fetchData}
         />
       )}

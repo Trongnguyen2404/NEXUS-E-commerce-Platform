@@ -7,6 +7,7 @@ import { ConfigService } from '@nestjs/config';
 import { JwtStrategy } from '@/modules/auth/strategies/jwt.strategies';
 import { RefreshTokenStrategy } from '@/modules/auth/strategies/refresh-token.strategies';
 
+// Authentication feature module.
 @Module({
   imports: [
     PassportModule.register({ defaultStrategy: 'jwt' }),

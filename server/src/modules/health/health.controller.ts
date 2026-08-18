@@ -3,18 +3,15 @@ import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { SkipThrottle } from '@nestjs/throttler';
 import { PrismaService } from '@/prisma/prisma.service';
 
-/**
- * Liveness/readiness probe. Deployment platforms need an endpoint that fails
- * when the app cannot serve traffic — "the process is running" is not the same
- * as "the database is reachable", and only the second one matters to a user.
- */
+// Liveness and readiness probes.
 @ApiTags('health')
 @Controller('health')
 export class HealthController {
   constructor(private readonly prisma: PrismaService) {}
 
+  // Reports that the process is up and the database answers.
   @Get()
-  @SkipThrottle() // Orchestrators poll this every few seconds.
+  @SkipThrottle()
   @ApiOperation({ summary: 'Service health and database connectivity' })
   @ApiResponse({ status: 200, description: 'Service is healthy' })
   @ApiResponse({ status: 503, description: 'Database is unreachable' })
@@ -24,8 +21,6 @@ export class HealthController {
     try {
       await this.prisma.$queryRaw`SELECT 1`;
     } catch {
-      // Must be a non-2xx status, otherwise a load balancer keeps routing
-      // traffic to an instance that cannot answer a single query.
       throw new ServiceUnavailableException(
         this.payload('error', 'down', Date.now() - startedAt),
       );
@@ -34,6 +29,7 @@ export class HealthController {
     return this.payload('ok', 'up', Date.now() - startedAt);
   }
 
+  // Reports whether the app is ready to take traffic.
   @Get('ready')
   @SkipThrottle()
   @ApiOperation({ summary: 'Readiness probe' })
@@ -43,6 +39,7 @@ export class HealthController {
     return this.check();
   }
 
+  // Builds the health response body.
   private payload(status: string, database: string, latencyMs: number) {
     return {
       status,

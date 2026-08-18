@@ -19,6 +19,7 @@ const field =
   'w-full bg-surface-muted border-2 border-transparent focus:border-black rounded-2xl py-3.5 px-5 text-sm font-medium outline-none transition-all';
 const label = 'block text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-2';
 
+// Admin screen for managing promo codes.
 const AdminCoupons = () => {
   const [coupons, setCoupons] = useState<Coupon[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -46,7 +47,6 @@ const AdminCoupons = () => {
     setIsSubmitting(true);
 
     try {
-      // Blank optional fields are omitted, not sent as empty strings.
       await axiosClient.post<Coupon>('/admin/coupons', {
         code: form.code.trim(),
         type: form.type,
@@ -83,8 +83,6 @@ const AdminCoupons = () => {
     if (!window.confirm(`Delete ${coupon.code}?`)) return;
 
     try {
-      // A used coupon is deactivated instead of deleted, so the API's message
-      // is shown rather than assuming it was removed.
       const res = await axiosClient.delete<{ message: string }>(`/admin/coupons/${coupon.id}`);
       toast.success(res.message);
       fetchCoupons();

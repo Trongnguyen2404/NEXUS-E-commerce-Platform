@@ -3,6 +3,7 @@ import { CartController } from '@/modules/cart/cart.controller';
 import { CartService } from '@/modules/cart/cart.service';
 import { PrismaModule } from '@/prisma/prisma.module';
 
+// Shopping cart feature module.
 @Module({
   imports: [PrismaModule],
   controllers: [CartController],

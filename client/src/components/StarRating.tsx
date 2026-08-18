@@ -1,20 +1,15 @@
 import { Star } from 'lucide-react';
 
+// Props for the star rating.
 interface Props {
-  /** 0–5. Fractional values render a partially filled star. */
   value: number;
   size?: number;
-  /** When set, the stars become clickable and report the chosen score. */
+
   onChange?: (rating: number) => void;
   className?: string;
 }
 
-/**
- * Read-only star row, or a 1–5 picker when `onChange` is given.
- *
- * The partial fill is done by clipping a filled star over an empty one, so an
- * average of 4.3 does not have to round to a whole star.
- */
+// Renders a star rating, interactive when given an onChange.
 const StarRating = ({ value, size = 16, onChange, className = '' }: Props) => {
   const isInteractive = typeof onChange === 'function';
 
@@ -25,8 +20,6 @@ const StarRating = ({ value, size = 16, onChange, className = '' }: Props) => {
       aria-label={isInteractive ? 'Choose a rating' : `Rated ${value} out of 5`}
     >
       {[1, 2, 3, 4, 5].map((star) => {
-        // How much of THIS star is filled: 1 when value >= star, 0 when the
-        // value has not reached it, a fraction in between.
         const fill = Math.max(0, Math.min(1, value - star + 1));
 
         const starIcon = (

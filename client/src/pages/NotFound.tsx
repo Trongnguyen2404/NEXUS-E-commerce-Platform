@@ -1,10 +1,7 @@
 import { Link } from 'react-router-dom';
 import { Home, Search } from 'lucide-react';
 
-/**
- * Catch-all for unknown URLs. Previously any typo rendered an empty <main> with
- * no navigation and no explanation.
- */
+// 404 page.
 const NotFound = () => (
   <div className="min-h-[70vh] flex items-center justify-center px-6">
     <div className="max-w-md w-full text-center">

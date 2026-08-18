@@ -1,21 +1,19 @@
 import { ArrowDownRight, ArrowUpRight, Minus } from 'lucide-react';
 import { chart } from './chartTokens';
 
+// Props for a dashboard stat tile.
 interface Props {
   label: string;
   value: string;
-  /** Percent change vs the previous period; null when that period was zero. */
+
   changePercent?: number | null;
   comparisonLabel?: string;
-  /** Set false where a rise is bad (e.g. out-of-stock count). */
+
   higherIsBetter?: boolean;
   hint?: string;
 }
 
-/**
- * One headline number. Deliberately not a one-bar chart — a single current
- * value with a trend is a stat tile.
- */
+// Single headline number with its period-on-period change.
 const StatTile = ({
   label,
   value,
@@ -28,8 +26,6 @@ const StatTile = ({
   const isFlat = hasDelta && changePercent === 0;
   const isUp = hasDelta && changePercent! > 0;
 
-  // Direction alone does not decide the colour — "up" is only good when the
-  // metric is one where up is good.
   const isGood = isUp === higherIsBetter;
   const deltaColor = isFlat
     ? chart.textMuted
@@ -69,8 +65,7 @@ const StatTile = ({
             {hint}
           </span>
         ) : (
-          // No prior data to compare against — say so rather than showing a
-          // meaningless "+100%".
+
           <span className="text-xs font-medium" style={{ color: chart.textMuted }}>
             No {comparisonLabel} data
           </span>

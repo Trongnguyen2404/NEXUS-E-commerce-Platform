@@ -1,9 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { ProductResponseDto } from '@/modules/products/dto/product-response.dto';
 
-/**
- * DTO for cart item response
- */
+// One cart line as returned by the API.
 export class CartItemResponseDto {
   @ApiProperty({
     description: 'Cart item ID',
@@ -54,6 +52,21 @@ export class CartItemResponseDto {
     example: 12,
   })
   availableStock: number;
+
+  @ApiProperty({
+    description:
+      'False when the line cannot be ordered as it stands, e.g. the product was deactivated or gained options after the line was added.',
+    example: true,
+  })
+  isOrderable: boolean;
+
+  @ApiPropertyOptional({
+    description:
+      'Why the line cannot be ordered, null when it can. Surfaced so the shopper can repair the line instead of only finding out at checkout.',
+    nullable: true,
+    example: 'Choose an option for Nexus Headphones before ordering',
+  })
+  unavailableReason: string | null;
 
   @ApiProperty({
     description: 'Product details',

@@ -4,19 +4,19 @@ import { Loader2 } from 'lucide-react';
 import { toast } from 'react-toastify';
 import axiosClient, { getErrorMessage } from '../api/axiosClient';
 import { useAuthStore } from '../store/useAuthStore';
-import { useCartStore } from '../store/useCartStore';
 import type { AuthResponse } from '../types/api';
+import useDocumentMeta from '../hooks/useDocumentMeta';
 
+// Sign-in page.
 const Login = () => {
+  useDocumentMeta({ title: 'Sign in', noIndex: true });
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
   const login = useAuthStore((state) => state.login);
-  const fetchCart = useCartStore((state) => state.fetchCart);
 
-  // ProtectedRoute lưu lại trang người dùng định vào, để quay lại đúng chỗ đó.
   const redirectTo = (location.state as { from?: string } | null)?.from ?? '/';
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -27,8 +27,6 @@ const Login = () => {
       const response = await axiosClient.post<AuthResponse>('/auth/login', { email, password });
 
       login(response.user, response.accessToken);
-
-      await fetchCart();
 
       toast.success('Welcome back to NEXUS!');
       navigate(redirectTo, { replace: true });

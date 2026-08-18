@@ -11,6 +11,7 @@ import {
   ValidateNested,
 } from 'class-validator';
 
+// One line of a basket being priced.
 class QuoteItemDto {
   @ApiProperty()
   @IsNotEmpty()
@@ -31,7 +32,7 @@ class QuoteItemDto {
   variantId?: string;
 }
 
-/** Only ids and quantities. Prices are never accepted from the client. */
+// Body for pricing a basket before the order exists.
 export class QuoteOrderDto {
   @ApiProperty({ type: [QuoteItemDto] })
   @IsArray()

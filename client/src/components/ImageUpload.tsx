@@ -1,69 +1,47 @@
 import { useRef, useState } from 'react';
 import { ImageIcon, Loader2, Trash2, UploadCloud } from 'lucide-react';
 import { toast } from 'react-toastify';
-import axiosClient, { getErrorMessage } from '../api/axiosClient';
+import { getErrorMessage } from '../api/axiosClient';
+import { uploadImage, type UploadFolder } from '../api/uploadImage';
+import ImageCropper from './ImageCropper';
 import { PRODUCT_PLACEHOLDER } from './productPlaceholder';
 
-/** Must match UPLOAD_FOLDERS on the server. */
-type UploadFolder = 'products' | 'categories' | 'variants';
-
-/** Same ceiling the API enforces — checked here only to fail fast. */
-const MAX_BYTES = 5 * 1024 * 1024;
-
+// Props for the single-image uploader.
 interface Props {
-  /** Current image URL, or '' for none. */
   value: string;
   onChange: (url: string) => void;
   folder: UploadFolder;
   label?: string;
+
+  aspect?: number;
 }
 
-/**
- * Drop-in replacement for the "Image URL" text box.
- *
- * The URL field is kept as a secondary option rather than removed: products
- * seeded with external images already hold links, and an admin occasionally
- * wants to point at one rather than re-host it.
- */
-const ImageUpload = ({ value, onChange, folder, label = 'Image' }: Props) => {
+// Uploads one image, routing it through the crop modal first.
+const ImageUpload = ({ value, onChange, folder, label = 'Image', aspect = 1 }: Props) => {
   const inputRef = useRef<HTMLInputElement>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
 
+  const [pending, setPending] = useState<File | null>(null);
+
+  const resetInput = () => {
+    if (inputRef.current) inputRef.current.value = '';
+  };
+
   const upload = async (file: File) => {
-    // The server rejects this too, but a local check gives a useful message
-    // instantly instead of after pushing megabytes over the wire.
-    if (file.size > MAX_BYTES) {
-      toast.error(
-        `That image is ${(file.size / 1024 / 1024).toFixed(1)}MB — the limit is 5MB.`,
-      );
-      return;
-    }
-
-    const body = new FormData();
-    body.append('file', file);
-
     setIsUploading(true);
     try {
-      const res = await axiosClient.post<{ url: string }>(
-        `/admin/uploads/image?folder=${folder}`,
-        body,
-        // Without this the instance's default `application/json` wins, and
-        // axios quietly serialises the FormData to JSON — the file never
-        // leaves the browser. Naming any other type stops that; the adapter
-        // then replaces it with the real multipart header plus its boundary.
-        { headers: { 'Content-Type': 'multipart/form-data' } },
-      );
-
-      onChange(res.url);
+      onChange(await uploadImage(file, folder));
       toast.success('Image uploaded');
     } catch (error) {
-      toast.error(getErrorMessage(error, 'Could not upload that image'));
+      toast.error(
+        error instanceof Error && error.name === 'FileTooLargeError'
+          ? error.message
+          : getErrorMessage(error, 'Could not upload that image'),
+      );
     } finally {
       setIsUploading(false);
-      // Let the same file be picked again after a failure — without this the
-      // input's value is unchanged and onChange never fires a second time.
-      if (inputRef.current) inputRef.current.value = '';
+      resetInput();
     }
   };
 
@@ -72,7 +50,7 @@ const ImageUpload = ({ value, onChange, folder, label = 'Image' }: Props) => {
     setIsDragging(false);
 
     const file = e.dataTransfer.files?.[0];
-    if (file) void upload(file);
+    if (file) setPending(file);
   };
 
   return (
@@ -137,7 +115,7 @@ const ImageUpload = ({ value, onChange, folder, label = 'Image' }: Props) => {
         className="hidden"
         onChange={(e) => {
           const file = e.target.files?.[0];
-          if (file) void upload(file);
+          if (file) setPending(file);
         }}
       />
 
@@ -165,8 +143,25 @@ const ImageUpload = ({ value, onChange, folder, label = 'Image' }: Props) => {
       </details>
 
       <p className="text-[11px] font-medium text-gray-400">
-        JPEG, PNG, WebP or AVIF up to 5MB. Resized and converted to WebP on upload.
+        JPEG, PNG, WebP or AVIF up to 5MB. Cropped to{' '}
+        {aspect === 1 ? 'a square' : `${aspect.toFixed(2)}:1`}, then resized and
+        converted to WebP on upload.
       </p>
+
+      {pending && (
+        <ImageCropper
+          file={pending}
+          aspect={aspect}
+          onCancel={() => {
+            setPending(null);
+            resetInput();
+          }}
+          onCropped={(cropped) => {
+            setPending(null);
+            void upload(cropped);
+          }}
+        />
+      )}
     </div>
   );
 };

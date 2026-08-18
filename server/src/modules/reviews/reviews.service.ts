@@ -13,23 +13,18 @@ import {
   ReviewSummaryDto,
 } from '@/modules/reviews/dto/review-response.dto';
 
-/** Orders that count as "actually received the product". */
 const FULFILLED_STATUSES: OrderStatus[] = [
   OrderStatus.PROCESSING,
   OrderStatus.SHIPPED,
   OrderStatus.DELIVERED,
 ];
 
+// Product review reads and writes, plus the rating summaries.
 @Injectable()
 export class ReviewsService {
   constructor(private prisma: PrismaService) {}
 
-  /**
-   * Creates or replaces the caller's review for a product.
-   *
-   * Upsert rather than create: the unique constraint is (userId, productId), so
-   * a second POST is the user editing their mind, not an error.
-   */
+  // Creates or updates the caller's review, flagging verified buyers.
   async upsert(
     userId: string,
     productId: string,
@@ -65,6 +60,7 @@ export class ReviewsService {
     return this.map(review);
   }
 
+  // Returns a page of a product's reviews with its summary.
   async findByProduct(
     productId: string,
     query: QueryReviewsDto,
@@ -90,8 +86,7 @@ export class ReviewsService {
         include: { user: true },
       }),
       this.prisma.review.count({ where }),
-      // Summary covers every review for the product, not just the current
-      // filter — otherwise filtering by 1 star would report an average of 1.
+
       this.summarise(productId),
     ]);
 
@@ -105,7 +100,7 @@ export class ReviewsService {
     };
   }
 
-  /** The caller's own review, so the UI can pre-fill the edit form. */
+  // Returns the caller's own review of a product.
   async findMine(
     userId: string,
     productId: string,
@@ -118,6 +113,7 @@ export class ReviewsService {
     return review ? this.map(review) : null;
   }
 
+  // Deletes a review the caller owns, or any review for an admin.
   async remove(
     id: string,
     userId: string,
@@ -126,7 +122,6 @@ export class ReviewsService {
     const review = await this.prisma.review.findUnique({ where: { id } });
     if (!review) throw new NotFoundException('Review not found');
 
-    // Admins moderate; everyone else may only delete their own.
     if (review.userId !== userId && role !== Role.ADMIN) {
       throw new ForbiddenException('You can only delete your own review');
     }
@@ -135,7 +130,7 @@ export class ReviewsService {
     return { message: 'Review deleted' };
   }
 
-  /** Ratings for many products at once, for product listings. */
+  // Summarises ratings for several products in one query.
   async summariseMany(
     productIds: string[],
   ): Promise<Map<string, { average: number; total: number }>> {
@@ -159,6 +154,7 @@ export class ReviewsService {
     );
   }
 
+  // Computes one product's average rating and star distribution.
   private async summarise(productId: string): Promise<ReviewSummaryDto> {
     const grouped = await this.prisma.review.groupBy({
       by: ['rating'],
@@ -190,7 +186,7 @@ export class ReviewsService {
     };
   }
 
-  /** Did this user ever receive this product in a fulfilled order? */
+  // Reports whether the user has a delivered order containing the product.
   private async hasPurchased(
     userId: string,
     productId: string,
@@ -205,6 +201,7 @@ export class ReviewsService {
     return count > 0;
   }
 
+  // Shapes a review row into its API response.
   private map(review: Review & { user: User }): ReviewResponseDto {
     return {
       id: review.id,
@@ -220,10 +217,7 @@ export class ReviewsService {
     };
   }
 
-  /**
-   * "John D." rather than the full name or the email. Reviews are public, so
-   * publishing an email address here would leak it to scrapers.
-   */
+  // Builds the display name shown on a review.
   private displayName(user: User): string {
     const first = user.firstName?.trim();
     const lastInitial = user.lastName?.trim()?.[0];

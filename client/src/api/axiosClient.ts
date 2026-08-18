@@ -5,12 +5,7 @@ import type { ApiError } from '../types/api';
 
 const API_URL = import.meta.env.VITE_API_URL;
 
-/**
- * The response interceptor below returns `response.data`, so every call already
- * resolves to the payload — but axios's own types still claim `AxiosResponse<T>`.
- * That mismatch is why callers used to write `const res: any = await ...`.
- * Re-declaring the surface here makes the real shape visible to TypeScript.
- */
+// Axios surface that returns response bodies instead of AxiosResponse objects.
 interface UnwrappedAxios {
   get<T>(url: string, config?: AxiosRequestConfig): Promise<T>;
   delete<T>(url: string, config?: AxiosRequestConfig): Promise<T>;
@@ -19,7 +14,7 @@ interface UnwrappedAxios {
   patch<T>(url: string, data?: unknown, config?: AxiosRequestConfig): Promise<T>;
 }
 
-/** Requests carry a retry flag so a refreshed call is not refreshed again. */
+// A request tagged so a 401 only triggers one refresh attempt.
 type RetriableRequest = InternalAxiosRequestConfig & { _retry?: boolean };
 
 const instance = axios.create({
@@ -27,11 +22,11 @@ const instance = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
-  // Bắt buộc để trình duyệt gửi kèm cookie refresh token (httpOnly) sang API.
+
   withCredentials: true,
 });
 
-// --- CƠ CHẾ KHÓA VÀ HÀNG ĐỢI ---
+// A request parked while the access token is being refreshed.
 interface QueuedRequest {
   resolve: (token: string) => void;
   reject: (reason: unknown) => void;
@@ -40,6 +35,7 @@ interface QueuedRequest {
 let isRefreshing = false;
 let failedQueue: QueuedRequest[] = [];
 
+// Releases every parked request once the refresh settles.
 const processQueue = (error: unknown, token: string | null = null) => {
   failedQueue.forEach((prom) => {
     if (error || !token) {
@@ -51,10 +47,8 @@ const processQueue = (error: unknown, token: string | null = null) => {
   failedQueue = [];
 };
 
-// Interceptor 1: Gắn Token trước khi gửi
 instance.interceptors.request.use(
   (config) => {
-    // Chỉ lấy từ localStorage cho an toàn và không bị lỗi TypeScript
     const token = localStorage.getItem('accessToken');
     if (token && config.headers) {
       config.headers.Authorization = `Bearer ${token}`;
@@ -64,22 +58,24 @@ instance.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
-// Interceptor 2: Tự động Refresh Token khi lỗi 401
 instance.interceptors.response.use(
   (response) => response.data,
   async (error) => {
     const originalRequest = error.config as RetriableRequest | undefined;
 
-    // Nếu lỗi 401, chưa retry và KHÔNG phải là đang gọi API login/refresh
+    // /auth/logout is on this list because the refresh-failure handler below calls it:
+    // without the exclusion its own 401 re-enters the interceptor, starts a second
+    // refresh, fails, logs out again and loops until the server starts throttling.
+    const skipsRefresh = ['/auth/login', '/auth/refresh', '/auth/logout'].some((path) =>
+      originalRequest?.url?.includes(path)
+    );
+
     if (
       error.response?.status === 401 &&
       originalRequest &&
       !originalRequest._retry &&
-      !originalRequest.url?.includes('/auth/login') &&
-      !originalRequest.url?.includes('/auth/refresh')
+      !skipsRefresh
     ) {
-
-      // NẾU ĐANG CÓ REQUEST KHÁC ĐI REFRESH -> CHO VÀO HÀNG ĐỢI
       if (isRefreshing) {
         return new Promise<string>(function (resolve, reject) {
           failedQueue.push({ resolve, reject });
@@ -91,13 +87,10 @@ instance.interceptors.response.use(
           .catch((err) => Promise.reject(err));
       }
 
-      // ĐÁNH DẤU BẮT ĐẦU REFRESH
       originalRequest._retry = true;
       isRefreshing = true;
 
       try {
-        // Refresh token đi kèm dưới dạng cookie httpOnly — JS không đọc được nó,
-        // chỉ cần bảo trình duyệt gửi cookie theo request.
         const res = await axios.post<{ accessToken: string }>(
           `${API_URL}/auth/refresh`,
           {},
@@ -106,10 +99,8 @@ instance.interceptors.response.use(
 
         const { accessToken } = res.data;
 
-        // Server đã xoay vòng cookie refresh token trong response này
         localStorage.setItem('accessToken', accessToken);
 
-        // Gắn token mới vào request bị lỗi và chạy tiếp
         originalRequest.headers.Authorization = `Bearer ${accessToken}`;
         processQueue(null, accessToken);
 
@@ -118,10 +109,8 @@ instance.interceptors.response.use(
       } catch (refreshError) {
         processQueue(refreshError, null);
 
-        // Ép đăng xuất
         useAuthStore.getState().logout();
 
-        // Chỉ redirect sang /login nếu đang ở trang cần xác thực
         const protectedPaths = ['/account', '/cart', '/checkout', '/admin'];
         const isProtected = protectedPaths.some((p) =>
           window.location.pathname.startsWith(p)
@@ -140,11 +129,7 @@ instance.interceptors.response.use(
   }
 );
 
-/**
- * Pulls a displayable string out of whatever the API (or axios) rejected with.
- * class-validator returns `message` as an array of every failed rule; a plain
- * `throw new BadRequestException('...')` returns a single string.
- */
+// Pulls a readable message out of any API or network error.
 export const getErrorMessage = (error: unknown, fallback = 'Something went wrong'): string => {
   const message = (error as ApiError | undefined)?.message;
 

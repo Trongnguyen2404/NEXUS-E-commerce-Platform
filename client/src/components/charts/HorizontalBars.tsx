@@ -1,26 +1,23 @@
 import { chart } from './chartTokens';
 
+// One row of the horizontal bar chart.
 export interface BarRow {
   key: string;
   label: string;
   value: number;
-  /** Printed at the bar tip. Falls back to the raw value. */
+  
   displayValue?: string;
   caption?: string;
 }
 
+// Props for the horizontal bar chart.
 interface Props {
   rows: BarRow[];
   emptyMessage?: string;
 }
 
-/**
- * Magnitude comparison across named rows.
- *
- * Every bar is the same colour on purpose: there is one series, so length
- * already encodes the value. Shading bars darker-where-bigger would spend the
- * colour channel restating what the reader can already see.
- */
+
+// Ranked bar chart used for best sellers and status breakdowns.
 const HorizontalBars = ({ rows, emptyMessage = 'Nothing to show yet.' }: Props) => {
   const max = Math.max(...rows.map((row) => row.value), 0);
 
@@ -51,8 +48,6 @@ const HorizontalBars = ({ rows, emptyMessage = 'Nothing to show yet.' }: Props) 
               </span>
             </div>
 
-            {/* Track is a lighter step of the same ramp, so state reads across
-                the whole bar rather than stopping at the fill. */}
             <div
               className="h-3 rounded-full overflow-hidden"
               style={{ backgroundColor: chart.seriesWash }}
@@ -64,7 +59,7 @@ const HorizontalBars = ({ rows, emptyMessage = 'Nothing to show yet.' }: Props) 
                 style={{
                   width: `${percent}%`,
                   backgroundColor: chart.series,
-                  // Square where it meets the baseline, rounded at the data end.
+                  
                   borderRadius: '0 4px 4px 0',
                 }}
               />

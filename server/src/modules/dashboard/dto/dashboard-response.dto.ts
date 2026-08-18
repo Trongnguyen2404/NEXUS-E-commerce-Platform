@@ -1,5 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 
+// One headline number plus its change on the previous period.
 export class MetricDto {
   @ApiProperty({ description: 'Value for the selected period' })
   current: number;
@@ -16,13 +17,14 @@ export class MetricDto {
   changePercent: number | null;
 }
 
+// The dashboard's headline metrics.
 export class DashboardOverviewDto {
   @ApiProperty({ description: 'Days covered by the current period' })
   periodDays: number;
 
   @ApiProperty({
     type: MetricDto,
-    description: 'Money actually captured (completed payments)',
+    description: 'Money kept: completed payments less anything refunded',
   })
   revenue: MetricDto;
 
@@ -32,10 +34,12 @@ export class DashboardOverviewDto {
   @ApiProperty({ type: MetricDto, description: 'New customer accounts' })
   customers: MetricDto;
 
-  @ApiProperty({ description: 'Mean value of a paid order in the period' })
+  @ApiProperty({
+    description: 'Mean value of a paid order in the period, net of refunds',
+  })
   averageOrderValue: number;
 
-  @ApiProperty({ description: 'All-time captured revenue' })
+  @ApiProperty({ description: 'All-time revenue kept, net of refunds' })
   lifetimeRevenue: number;
 
   @ApiProperty({ description: 'Orders waiting to be paid or actioned' })
@@ -54,6 +58,7 @@ export class DashboardOverviewDto {
   unreadContacts: number;
 }
 
+// One point on the revenue chart.
 export class RevenuePointDto {
   @ApiProperty({ example: '2026-08-13', description: 'Date in UTC' })
   date: string;
@@ -65,6 +70,7 @@ export class RevenuePointDto {
   orders: number;
 }
 
+// One row of the best sellers table.
 export class TopProductDto {
   @ApiProperty() productId: string;
   @ApiProperty() name: string;
@@ -74,6 +80,7 @@ export class TopProductDto {
   revenue: number;
 }
 
+// Order count for a single status.
 export class StatusBreakdownDto {
   @ApiProperty({ example: 'PENDING' }) status: string;
   @ApiProperty({ example: 12 }) count: number;

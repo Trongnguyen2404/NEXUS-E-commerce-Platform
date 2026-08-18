@@ -9,6 +9,7 @@ import {
   ValidateNested,
 } from 'class-validator';
 
+// One line of a new order.
 class OrderItemDto {
   @ApiProperty()
   @IsNotEmpty()
@@ -27,19 +28,8 @@ class OrderItemDto {
   @IsOptional()
   @IsString()
   variantId?: string;
-
-  // @ApiProperty({
-  //     example: 49.99,
-  // })
-  // @IsNumber(
-  //     {
-  //         maxDecimalPlaces: 2,
-  //     },
-  //     { message: 'Price must be a valid number (e.g., 49.99)' },
-  // )
-  // @Type(() => Number)
-  // price: number;
 }
+// Body for placing an order.
 export class CreateOrderDto {
   @ApiProperty({ type: [OrderItemDto] })
   @IsArray()

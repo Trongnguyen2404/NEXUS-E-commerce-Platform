@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { chart, compactMoney, niceCeiling } from './chartTokens';
 import type { RevenuePoint } from '../../types/api';
 
+// Props for the revenue chart.
 interface Props {
   data: RevenuePoint[];
 }
@@ -13,6 +14,7 @@ const PAD = { top: 16, right: 16, bottom: 28, left: 56 };
 const PLOT_W = WIDTH - PAD.left - PAD.right;
 const PLOT_H = HEIGHT - PAD.top - PAD.bottom;
 
+// Formats an ISO date as a short axis label.
 const shortDate = (iso: string) =>
   new Date(`${iso}T00:00:00Z`).toLocaleDateString('en-US', {
     month: 'short',
@@ -20,13 +22,8 @@ const shortDate = (iso: string) =>
     timeZone: 'UTC',
   });
 
-/**
- * Daily revenue as a single-series area chart.
- *
- * One series, so there is no legend — the heading says what is plotted. Order
- * count is shown in the tooltip only: putting it on a second y-axis would
- * invent a correlation between two unrelated scales.
- */
+
+// Area chart of revenue over time.
 const RevenueAreaChart = ({ data }: Props) => {
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
 
@@ -49,7 +46,7 @@ const RevenueAreaChart = ({ data }: Props) => {
       points: pts,
       areaPath: area,
       linePath: line,
-      // Four bands keeps the grid recessive; more lines start competing with data.
+      
       ticks: [0, 0.25, 0.5, 0.75, 1].map((f) => ({ value: max * f, y: y(max * f) })),
       maxY: max,
     };
@@ -61,10 +58,10 @@ const RevenueAreaChart = ({ data }: Props) => {
     null as (typeof points)[number] | null,
   );
 
-  // Which x labels to print: first, last and a few in between, so they never collide.
+  
   const labelStep = Math.max(1, Math.ceil(points.length / 7));
 
-  /** Maps a pointer position to the nearest data point. */
+  
   const handleMove = (e: React.PointerEvent<SVGSVGElement>) => {
     const rect = e.currentTarget.getBoundingClientRect();
     const svgX = ((e.clientX - rect.left) / rect.width) * WIDTH;
@@ -94,7 +91,6 @@ const RevenueAreaChart = ({ data }: Props) => {
         onPointerMove={handleMove}
         onPointerLeave={() => setHoverIndex(null)}
       >
-        {/* Gridlines: hairline, solid, recessive */}
         {ticks.map((tick) => (
           <g key={tick.value}>
             <line
@@ -118,7 +114,6 @@ const RevenueAreaChart = ({ data }: Props) => {
           </g>
         ))}
 
-        {/* Area wash at ~10%, then the 2px line that actually carries the data */}
         <path d={areaPath} fill={chart.series} fillOpacity={0.1} />
         <path
           d={linePath}
@@ -129,7 +124,6 @@ const RevenueAreaChart = ({ data }: Props) => {
           strokeLinecap="round"
         />
 
-        {/* Peak marker, direct-labelled. Labelling every point would be chaos. */}
         {peak && peak.revenue > 0 && (
           <>
             <circle cx={peak.x} cy={peak.y} r={4.5} fill={chart.series} stroke={chart.surface} strokeWidth={2} />
@@ -146,7 +140,6 @@ const RevenueAreaChart = ({ data }: Props) => {
           </>
         )}
 
-        {/* Crosshair */}
         {active && (
           <>
             <line
@@ -161,7 +154,6 @@ const RevenueAreaChart = ({ data }: Props) => {
           </>
         )}
 
-        {/* Baseline */}
         <line
           x1={PAD.left}
           x2={WIDTH - PAD.right}
@@ -175,8 +167,8 @@ const RevenueAreaChart = ({ data }: Props) => {
           i % labelStep === 0 || i === points.length - 1 ? (
             <text
               key={p.date}
-              // A centred label on the first/last point overflows the viewBox and
-              // gets clipped, so anchor the edge ones to the side instead.
+              
+              
               x={i === 0 ? PAD.left : i === points.length - 1 ? WIDTH - PAD.right : p.x}
               y={HEIGHT - 8}
               textAnchor={i === 0 ? 'start' : i === points.length - 1 ? 'end' : 'middle'}

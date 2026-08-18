@@ -5,6 +5,7 @@ import {
   type UploadFolder,
 } from '@/modules/storage/storage.service';
 
+// Query string accepted by the image upload endpoint.
 export class UploadImageQueryDto {
   @ApiPropertyOptional({
     enum: UPLOAD_FOLDERS,
@@ -16,6 +17,7 @@ export class UploadImageQueryDto {
   folder?: UploadFolder;
 }
 
+// Upload result returned to the admin UI.
 export class UploadResponseDto {
   @ApiProperty({
     description: 'Absolute URL of the stored image. Save this on the product.',

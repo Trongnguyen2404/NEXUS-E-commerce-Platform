@@ -15,17 +15,14 @@ import {
   TopProductDto,
 } from '@/modules/dashboard/dto/dashboard-response.dto';
 
-/** Stock at or below this counts as "running low" on the dashboard. */
 const LOW_STOCK_THRESHOLD = 5;
 
+// Aggregates orders and revenue for the admin dashboard.
 @Injectable()
 export class DashboardService {
   constructor(private prisma: PrismaService) {}
 
-  /**
-   * Headline numbers, each compared with the equally long window immediately
-   * before it — a revenue figure without a trend is not decision-useful.
-   */
+  // Computes revenue, orders, customers and stock against the previous period.
   async getOverview(days: number): Promise<DashboardOverviewDto> {
     const now = Date.now();
     const periodMs = days * 24 * 60 * 60 * 1000;
@@ -50,20 +47,18 @@ export class DashboardService {
       outOfStockProducts,
       unreadContacts,
     ] = await Promise.all([
-      // Revenue is read from payments, not orders: it is the money actually
-      // captured, so an unpaid or cancelled order never inflates it.
       this.prisma.payment.aggregate({
         where: paidInRange(currentFrom),
-        _sum: { amount: true },
+        _sum: { amount: true, refundedAmount: true },
         _count: true,
       }),
       this.prisma.payment.aggregate({
         where: paidInRange(previousFrom, currentFrom),
-        _sum: { amount: true },
+        _sum: { amount: true, refundedAmount: true },
       }),
       this.prisma.payment.aggregate({
         where: { status: PaymentStatus.COMPLETED },
-        _sum: { amount: true },
+        _sum: { amount: true, refundedAmount: true },
       }),
 
       this.prisma.order.count({ where: { createdAt: { gte: currentFrom } } }),
@@ -89,14 +84,14 @@ export class DashboardService {
       this.prisma.contact.count({ where: { status: ContactStatus.PENDING } }),
     ]);
 
-    const currentRevenue = Number(revenueCurrent._sum.amount ?? 0);
+    const currentRevenue = this.netRevenue(revenueCurrent._sum);
     const paidOrderCount = revenueCurrent._count;
 
     return {
       periodDays: days,
       revenue: this.metric(
         currentRevenue,
-        Number(revenuePrevious._sum.amount ?? 0),
+        this.netRevenue(revenuePrevious._sum),
       ),
       orders: this.metric(ordersCurrent, ordersPrevious),
       customers: this.metric(customersCurrent, customersPrevious),
@@ -104,7 +99,7 @@ export class DashboardService {
         paidOrderCount === 0
           ? 0
           : Math.round((currentRevenue / paidOrderCount) * 100) / 100,
-      lifetimeRevenue: Number(lifetime._sum.amount ?? 0),
+      lifetimeRevenue: this.netRevenue(lifetime._sum),
       pendingOrders,
       lowStockProducts,
       outOfStockProducts,
@@ -112,22 +107,16 @@ export class DashboardService {
     };
   }
 
-  /**
-   * Daily revenue and order counts.
-   *
-   * Grouped in SQL with date_trunc because Prisma cannot group by a date part.
-   * Days with no sales are filled in afterwards — a chart that silently skips
-   * empty days makes a quiet week look like a busy one.
-   */
+  // Builds a per-day revenue series, filling days with no orders.
   async getRevenueSeries(days: number): Promise<RevenuePointDto[]> {
     const from = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
 
     const rows = await this.prisma.$queryRaw<
       { day: Date; revenue: Prisma.Decimal | null; orders: bigint }[]
     >`
-      SELECT date_trunc('day', "createdAt") AS day,
-             SUM("amount")                 AS revenue,
-             COUNT(*)                      AS orders
+      SELECT date_trunc('day', "createdAt")  AS day,
+             SUM("amount" - "refundedAmount") AS revenue,
+             COUNT(*)                         AS orders
       FROM payments
       WHERE "status" = 'COMPLETED'
         AND "createdAt" >= ${from}
@@ -159,13 +148,7 @@ export class DashboardService {
     return series;
   }
 
-  /**
-   * Best sellers by revenue.
-   *
-   * Raw SQL because the figure is SUM(price * quantity) — Prisma's groupBy can
-   * only sum a single column. Cancelled orders are excluded so an abandoned
-   * basket never counts as a sale.
-   */
+  // Ranks products by units sold in the window.
   async getTopProducts(days: number, limit: number): Promise<TopProductDto[]> {
     const from = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
 
@@ -202,7 +185,7 @@ export class DashboardService {
     }));
   }
 
-  /** How many orders sit in each status right now, for the funnel. */
+  // Counts orders grouped by status.
   async getStatusBreakdown(): Promise<StatusBreakdownDto[]> {
     const grouped = await this.prisma.order.groupBy({
       by: ['status'],
@@ -213,19 +196,31 @@ export class DashboardService {
       grouped.map((row) => [row.status, row._count.status]),
     );
 
-    // Every status is listed, including the empty ones, so the chart legend
-    // does not change shape as data arrives.
     return Object.values(OrderStatus).map((status) => ({
       status,
       count: counts.get(status) ?? 0,
     }));
   }
 
+  // Money kept, not money charged. A partial refund leaves the payment
+  // COMPLETED with refundedAmount set, so summing "amount" alone would keep
+  // counting the part that went back. Subtracted as Decimal because these are
+  // two-place money columns and must not accumulate through float.
+  private netRevenue(sum: {
+    amount: Prisma.Decimal | null;
+    refundedAmount: Prisma.Decimal | null;
+  }): number {
+    const charged = sum.amount ?? new Prisma.Decimal(0);
+    const refunded = sum.refundedAmount ?? new Prisma.Decimal(0);
+    return charged.minus(refunded).toDecimalPlaces(2).toNumber();
+  }
+
+  // Pairs a current value with its percentage change.
   private metric(current: number, previous: number): MetricDto {
     return {
       current: Math.round(current * 100) / 100,
       previous: Math.round(previous * 100) / 100,
-      // Growth from zero is undefined, not infinite — the UI shows a dash.
+
       changePercent:
         previous === 0
           ? null

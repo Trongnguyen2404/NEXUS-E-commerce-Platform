@@ -4,10 +4,12 @@ import { Role } from '@prisma/client';
 import { Observable } from 'rxjs';
 import { ROLES_KEY } from '@/common/decorators/roles.decorator';
 
+// Checks the caller's role against the roles the route asked for.
 @Injectable()
 export class RolesGuard implements CanActivate {
   constructor(private reflector: Reflector) {}
 
+  // Allows the request when the user holds one of the required roles.
   canActivate(
     context: ExecutionContext,
   ): boolean | Promise<boolean> | Observable<boolean> {

@@ -10,6 +10,7 @@ import {
   Min,
 } from 'class-validator';
 
+// Body for creating a product.
 export class CreateProductDto {
   @ApiProperty({
     description: 'Product name',

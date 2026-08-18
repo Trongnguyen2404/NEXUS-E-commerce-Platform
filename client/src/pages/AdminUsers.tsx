@@ -5,6 +5,7 @@ import axiosClient, { getErrorMessage } from '../api/axiosClient';
 import { useAuthStore } from '../store/useAuthStore';
 import type { User as ApiUser } from '../types/api';
 
+// Admin screen listing registered users.
 const AdminUsers = () => {
   const [usersList, setUsersList] = useState<ApiUser[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -12,7 +13,6 @@ const AdminUsers = () => {
 
   const fetchUsers = async () => {
     try {
-      // GET /users trả thẳng một mảng, không bọc trong { data }.
       const res = await axiosClient.get<ApiUser[]>('/users');
       setUsersList(Array.isArray(res) ? res : []);
     } catch {
@@ -44,7 +44,7 @@ const AdminUsers = () => {
   return (
     <div className="min-h-screen bg-[#EDEDF0] py-12 px-4 sm:px-8">
       <div className="max-w-[1200px] mx-auto">
-        
+
         <div className="bg-white rounded-[2rem] p-8 sm:p-10 mb-8 border border-gray-300 shadow-sm flex justify-between items-end">
           <div>
             <h1 className="text-4xl sm:text-5xl font-black uppercase tracking-tighter text-black">Members</h1>

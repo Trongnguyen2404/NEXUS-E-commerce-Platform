@@ -6,14 +6,16 @@ import { getErrorMessage } from '../api/axiosClient';
 import { useAuthStore } from '../store/useAuthStore';
 import { useWishlistStore } from '../store/useWishlistStore';
 
+// Props for the save button.
 interface Props {
   productId: string;
   size?: number;
-  /** `icon` is the floating circle on a product card; `full` is a labelled button. */
+
   variant?: 'icon' | 'full';
   className?: string;
 }
 
+// Heart button that toggles a product in the wishlist.
 const WishlistButton = ({ productId, size = 18, variant = 'icon', className = '' }: Props) => {
   const navigate = useNavigate();
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
@@ -24,8 +26,6 @@ const WishlistButton = ({ productId, size = 18, variant = 'icon', className = ''
   const isSaved = savedIds.has(productId);
 
   const handleClick = async (e: React.MouseEvent) => {
-    // These sit inside clickable product cards — without this the click would
-    // also navigate to the product page.
     e.preventDefault();
     e.stopPropagation();
 
@@ -55,7 +55,7 @@ const WishlistButton = ({ productId, size = 18, variant = 'icon', className = ''
         aria-pressed={isSaved}
         className={`flex items-center justify-center gap-2 py-4 px-6 rounded-2xl font-black uppercase tracking-widest text-xs transition-all disabled:opacity-50 ${
           isSaved
-            ? 'bg-red-50 text-red-500 hover:bg-red-100'
+            ? 'bg-state-danger-soft text-state-danger hover:bg-state-danger-soft'
             : 'bg-[#F5F5F7] text-black hover:bg-gray-200'
         } ${className}`}
       >
@@ -76,7 +76,7 @@ const WishlistButton = ({ productId, size = 18, variant = 'icon', className = ''
     >
       <Heart
         size={size}
-        className={isSaved ? 'text-red-500' : 'text-gray-400'}
+        className={isSaved ? 'text-state-danger' : 'text-gray-400'}
         fill={isSaved ? 'currentColor' : 'none'}
         strokeWidth={2}
       />

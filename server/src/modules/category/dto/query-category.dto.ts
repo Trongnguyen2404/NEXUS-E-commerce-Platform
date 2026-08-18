@@ -5,17 +5,20 @@ import {
   IsNumber,
   IsOptional,
   IsString,
+  Max,
   Min,
 } from 'class-validator';
 
+// Query string accepted when listing categories.
 export class QueryCategoryDto {
   @ApiPropertyOptional({
     description: 'Filter by active status',
     example: true,
   })
-  @Transform(({ value }) => {
-    if (value === 'true' || value === true) return true;
-    if (value === 'false' || value === false) return false;
+  @Transform(({ obj, key }: { obj: Record<string, unknown>; key: string }) => {
+    const raw = obj?.[key];
+    if (raw === 'true' || raw === true) return true;
+    if (raw === 'false' || raw === false) return false;
     return undefined;
   })
   @IsBoolean()
@@ -51,6 +54,8 @@ export class QueryCategoryDto {
   @Type(() => Number)
   @IsNumber()
   @Min(1)
+  // Caps how much one request can pull; ?limit=99999 was accepted before.
+  @Max(100)
   @IsOptional()
   limit = 10;
 }

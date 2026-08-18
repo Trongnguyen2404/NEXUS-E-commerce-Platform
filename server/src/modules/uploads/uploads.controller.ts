@@ -33,12 +33,7 @@ import {
   UploadResponseDto,
 } from '@/modules/uploads/dto/upload.dto';
 
-/**
- * Admin-only image upload.
- *
- * Deliberately not open to customers: an unauthenticated upload endpoint is
- * free file hosting for anyone who finds it, and the bill lands on us.
- */
+// Admin-only image upload endpoint.
 @ApiTags('uploads')
 @ApiBearerAuth('JWT-auth')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -47,19 +42,14 @@ import {
 export class UploadsController {
   constructor(private readonly storage: StorageService) {}
 
+  // Accepts one image file and returns the stored URL.
   @Post('image')
   @ModerateThrottle()
   @UseInterceptors(
     FileInterceptor('file', {
-      // Straight to memory — the bytes go through sharp and then to the
-      // storage driver, so a temporary file on disk would serve no purpose and
-      // would need cleaning up.
       storage: memoryStorage(),
       limits: { fileSize: MAX_UPLOAD_BYTES, files: 1 },
       fileFilter: (_req, file, callback) => {
-        // Not the real check — the client picks this header, so it proves
-        // nothing. It only avoids buffering 5MB of something that was never
-        // going to be an image. StorageService decodes the bytes to be sure.
         if (!file.mimetype.startsWith('image/')) {
           return callback(
             new BadRequestException('Only image files can be uploaded.'),

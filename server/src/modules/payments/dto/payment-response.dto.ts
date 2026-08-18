@@ -1,5 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 
+// Client secret and payment id handed back to Stripe.js.
 export class CreatePaymentIntentResponse {
   @ApiProperty({
     example: 'pi_165465465',
@@ -14,6 +15,7 @@ export class CreatePaymentIntentResponse {
   paymentId: string;
 }
 
+// Payment as returned by the API.
 export class PaymentResponseDto {
   @ApiProperty({
     example: '1215645s454sdosd4s-454sd',
@@ -65,6 +67,7 @@ export class PaymentResponseDto {
   updatedAt: Date;
 }
 
+// Envelope wrapping a payment payload with a message.
 export class PaymentApiResponseDto {
   @ApiProperty({
     example: true,
@@ -83,6 +86,7 @@ export class PaymentApiResponseDto {
   message?: string;
 }
 
+// Envelope wrapping a new payment intent with a message.
 export class CreatePaymentIntentApiResponseDto {
   @ApiProperty({
     example: true,

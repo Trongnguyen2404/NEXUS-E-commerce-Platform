@@ -10,63 +10,32 @@ import { randomUUID } from 'node:crypto';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join, resolve as resolvePath } from 'node:path';
 
-/**
- * Folders an upload may be filed under.
- *
- * A fixed list rather than free text: the local driver turns this straight into
- * a path, so "../../" in a query string would otherwise let an admin write
- * outside the upload directory.
- */
 export const UPLOAD_FOLDERS = ['products', 'categories', 'variants'] as const;
 export type UploadFolder = (typeof UPLOAD_FOLDERS)[number];
 
-/** Formats we are willing to decode. Anything else is refused. */
 const ALLOWED_FORMATS = new Set(['jpeg', 'png', 'webp', 'avif']);
 
-/** Longest edge in pixels — a product photo has no use for more. */
 const MAX_EDGE = 1600;
 
-/** Rejected by multer before a byte reaches sharp. */
 export const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
 
 export interface StoredImage {
-  /** Absolute URL, ready to drop into an <img src>. */
   url: string;
 }
 
-/**
- * Reads one field out of a parsed CLOUDINARY_URL.
- *
- * Two things have to be undone. `URL` hands back the userinfo percent-encoded,
- * so a secret containing anything outside the unreserved set arrives mangled
- * and authentication fails for no visible reason. And Cloudinary's own
- * documentation writes the template as
- *   cloudinary://<api_key>:<api_secret>@<cloud_name>
- * so the angle brackets get pasted along with the values often enough to be
- * worth handling — they are punctuation in the docs, not part of the
- * credential. Same reasoning as MailService stripping the spaces Gmail shows
- * inside an app password.
- */
+// Decodes a percent-encoded credential and strips any pasted angle brackets.
 const readCredential = (raw: string): string =>
   decodeURIComponent(raw).replace(/^<|>$/g, '').trim();
 
-/**
- * Stores uploaded images.
- *
- * Same shape as MailService: fill in CLOUDINARY_URL and images go to
- * Cloudinary; leave it blank and they are written to a local directory, so a
- * fresh clone works offline with no signup. Callers cannot tell the difference.
- *
- * The local driver is for development only. Every host worth deploying to has
- * an ephemeral filesystem — Render, Vercel and Fly (without a volume) all
- * discard it on redeploy — so anything written there is lost on the next push.
- */
+// Stores uploaded images on Cloudinary, or on local disk when it is not configured.
 @Injectable()
 export class StorageService implements OnModuleInit {
   private readonly logger = new Logger(StorageService.name);
   private useCloudinary = false;
-  private readonly localDir = resolvePath(process.env.UPLOAD_DIR ?? 'uploads');
 
+  private readonly localDir = resolvePath(process.env.UPLOAD_DIR || 'uploads');
+
+  // Picks the storage backend at boot and logs which one won.
   onModuleInit() {
     const url = process.env.CLOUDINARY_URL;
 
@@ -78,20 +47,9 @@ export class StorageService implements OnModuleInit {
     );
   }
 
-  /**
-   * Hands the SDK its credentials, parsed here rather than by the SDK itself.
-   *
-   * Cloudinary does read CLOUDINARY_URL from the environment — but only once,
-   * as the package is imported. Nest's ConfigModule loads .env during module
-   * initialisation, which is after every import has already run, so by the time
-   * the variable exists the SDK has long since given up on it and cloud_name
-   * stays undefined. Every upload then fails with "Must supply cloud_name".
-   *
-   * @returns whether Cloudinary is usable; false falls back to local storage.
-   */
+  // Parses CLOUDINARY_URL by hand because the SDK reads it before .env is loaded.
   private configureCloudinary(url: string): boolean {
     try {
-      // cloudinary://<api_key>:<api_secret>@<cloud_name>
       const parsed = new URL(url);
 
       const apiKey = readCredential(parsed.username);
@@ -110,12 +68,10 @@ export class StorageService implements OnModuleInit {
       });
 
       this.useCloudinary = true;
-      // The cloud name is safe to print; the rest of that URL is a credential.
+
       this.logger.log(`Uploads go to Cloudinary (cloud "${cloudName}")`);
       return true;
     } catch {
-      // Complain loudly, then carry on with local storage — an image uploader
-      // is not worth refusing to boot over.
       this.logger.error(
         'CLOUDINARY_URL is malformed. Expected cloudinary://<api_key>:<api_secret>@<cloud_name>. Falling back to local storage.',
       );
@@ -123,53 +79,64 @@ export class StorageService implements OnModuleInit {
     }
   }
 
-  async saveImage(buffer: Buffer, folder: UploadFolder): Promise<StoredImage> {
-    const image = await this.normalise(buffer);
+  // Validates, crops and resizes an image, then stores it and returns its URL.
+  async saveImage(
+    buffer: Buffer,
+    folder: UploadFolder,
+    aspect?: number,
+  ): Promise<StoredImage> {
+    const image = await this.normalise(buffer, aspect);
 
     return this.useCloudinary
       ? this.toCloudinary(image, folder)
       : this.toDisk(image, folder);
   }
 
-  /**
-   * Decodes, shrinks and re-encodes the upload.
-   *
-   * This doubles as the content check, and it is the only one worth trusting:
-   * the browser's Content-Type header and the file extension are both chosen by
-   * whoever is uploading, so neither is evidence of anything. Renaming
-   * `shell.php` to `shell.png` is the classic bypass. sharp actually decodes the
-   * bytes, so that file fails here instead of landing somewhere we serve.
-   *
-   * Re-encoding also drops EXIF — which on a photo taken with a phone carries
-   * the GPS coordinates of wherever it was taken.
-   */
-  private async normalise(buffer: Buffer): Promise<Buffer> {
-    let format: string | undefined;
+  // Decodes the image to prove it is really an image, then crops and converts to WebP.
+  private async normalise(buffer: Buffer, aspect?: number): Promise<Buffer> {
+    let meta: sharp.Metadata;
 
     try {
-      // Reads the header only, so this is cheap despite the second decode below.
-      ({ format } = await sharp(buffer).metadata());
+      meta = await sharp(buffer).metadata();
     } catch {
       throw new BadRequestException('That file is not an image we can read.');
     }
 
+    const { format } = meta;
     if (!format || !ALLOWED_FORMATS.has(format)) {
       throw new BadRequestException(
         `${format ?? 'That'} is not a supported image format. Use JPEG, PNG, WebP or AVIF.`,
       );
     }
 
-    return (
-      sharp(buffer)
-        // Applies the EXIF orientation flag before the metadata is discarded,
-        // otherwise portrait phone photos come out on their side.
-        .rotate()
+    const pipeline = sharp(buffer).rotate();
+
+    if (!aspect) {
+      return await pipeline
         .resize(MAX_EDGE, MAX_EDGE, { fit: 'inside', withoutEnlargement: true })
         .webp({ quality: 82 })
-        .toBuffer()
+        .toBuffer();
+    }
+
+    const swapped = (meta.orientation ?? 1) >= 5;
+    const sourceWidth = (swapped ? meta.height : meta.width) ?? MAX_EDGE;
+    const sourceHeight = (swapped ? meta.width : meta.height) ?? MAX_EDGE;
+
+    const width = Math.round(
+      Math.min(MAX_EDGE, sourceWidth, sourceHeight * aspect),
     );
+
+    return await pipeline
+      .resize(width, Math.round(width / aspect), {
+        fit: 'cover',
+
+        position: sharp.strategy.attention,
+      })
+      .webp({ quality: 82 })
+      .toBuffer();
   }
 
+  // Writes the image to the local uploads directory.
   private async toDisk(
     image: Buffer,
     folder: UploadFolder,
@@ -177,15 +144,13 @@ export class StorageService implements OnModuleInit {
     const dir = join(this.localDir, folder);
     await mkdir(dir, { recursive: true });
 
-    // The uploader's own filename is never reused. It is the usual path
-    // traversal vector, and it leaks whatever the file happened to be called on
-    // their desktop.
     const name = `${randomUUID()}.webp`;
     await writeFile(join(dir, name), image);
 
     return { url: `${this.publicBase()}/uploads/${folder}/${name}` };
   }
 
+  // Uploads the image to Cloudinary.
   private toCloudinary(
     image: Buffer,
     folder: UploadFolder,
@@ -195,8 +160,6 @@ export class StorageService implements OnModuleInit {
         { folder: `nexus/${folder}`, resource_type: 'image' },
         (error, result) => {
           if (error || !result) {
-            // Quota, revoked key, network. Log the real reason, tell the admin
-            // something they can act on.
             this.logger.error(`Cloudinary upload failed: ${error?.message}`);
             return reject(
               new BadRequestException(
@@ -213,17 +176,11 @@ export class StorageService implements OnModuleInit {
     });
   }
 
-  /**
-   * Where a browser can reach this API.
-   *
-   * Has to be absolute. The frontend is served from a different origin (5173
-   * against the API's 3000 in development, two different hosts in production),
-   * so a relative "/uploads/x.webp" would resolve against the frontend and 404.
-   */
+  // Returns the public base URL used to build local image links.
   private publicBase(): string {
     const base =
-      process.env.API_PUBLIC_URL ??
-      `http://localhost:${process.env.PORT ?? 3000}`;
+      process.env.API_PUBLIC_URL ||
+      `http://localhost:${process.env.PORT || 3000}`;
 
     return base.replace(/\/+$/, '');
   }

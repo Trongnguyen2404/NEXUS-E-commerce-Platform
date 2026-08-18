@@ -2,12 +2,12 @@ import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import { IsInt, IsOptional, Max, Min } from 'class-validator';
 
+// Query string accepted by the dashboard endpoints.
 export class QueryDashboardDto {
   @ApiPropertyOptional({
     description: 'Size of the reporting window in days',
     minimum: 1,
-    // Capped: the raw aggregates scan every payment in the range, and nobody
-    // reads a 5-year daily chart on a dashboard.
+
     maximum: 365,
     default: 30,
   })

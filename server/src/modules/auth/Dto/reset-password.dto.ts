@@ -1,6 +1,7 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { IsNotEmpty, IsString, Matches, MinLength } from 'class-validator';
 
+// Body for setting a new password from a reset token.
 export class ResetPasswordDto {
   @ApiProperty({
     description: 'The token from the reset link that was emailed to the user',
@@ -10,8 +11,6 @@ export class ResetPasswordDto {
   @IsNotEmpty({ message: 'Reset token is required' })
   token: string;
 
-  // Same rules as RegisterDto — a reset must not be a way to set a weaker
-  // password than registration allows.
   @ApiProperty({
     description: 'The new password',
     example: 'StrongP@ssw0rd!',

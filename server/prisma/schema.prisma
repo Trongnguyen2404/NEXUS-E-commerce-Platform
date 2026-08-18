@@ -78,7 +78,7 @@ model PasswordResetToken {
 
   // Only the SHA-256 hash is stored. A leaked database dump must not let anyone
   // take over accounts by replaying the tokens inside it.
-  tokenHash String   @unique
+  tokenHash String    @unique
   expiresAt DateTime
   usedAt    DateTime?
 
@@ -99,8 +99,16 @@ model Product {
   price       Decimal @db.Decimal(10, 2)
   stock       Int     @default(0)
   sku         String  @unique
-  imageUrl    String?
-  isActive    Boolean @default(true)
+
+  /// Cover image, shown wherever the product appears in a list.
+  ///
+  /// Duplicates images[0].url on purpose. Product listings are the hottest
+  /// query in the app and they only ever need one picture, so keeping the
+  /// cover on the row avoids joining the gallery to render a grid. The API
+  /// rewrites it whenever the gallery changes; nothing else should set it.
+  imageUrl String?
+
+  isActive Boolean @default(true)
 
   // Relations
   orderItems    OrderItem[]
@@ -108,6 +116,7 @@ model Product {
   reviews       Review[]
   wishlistItems WishlistItem[]
   variants      ProductVariant[]
+  images        ProductImage[]
 
   // True once the product sells in variants. When set, `price` and `stock` above
   // are ignored in favour of the per-variant values — kept as a column rather
@@ -147,12 +156,12 @@ model Category {
 }
 
 model OrderItem {
-  id        String  @id @default(uuid())
-  quantity  Int
-  price     Decimal @db.Decimal(10, 2)
-  productName String @default("unknown") //for data Snapshot
-  productId String
-  product   Product @relation(fields: [productId], references: [id])
+  id          String  @id @default(uuid())
+  quantity    Int
+  price       Decimal @db.Decimal(10, 2)
+  productName String  @default("unknown") //for data Snapshot
+  productId   String
+  product     Product @relation(fields: [productId], references: [id])
 
   variantId String?
   variant   ProductVariant? @relation(fields: [variantId], references: [id])
@@ -290,6 +299,29 @@ model Payment {
   @@map("payments")
 }
 
+/// One picture in a product's gallery.
+///
+/// A table rather than a string array so the order is explicit and a single
+/// image can be removed without rewriting the rest. Cascades on delete: an
+/// image has no meaning once its product is gone.
+model ProductImage {
+  id String @id @default(uuid())
+
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  url String
+
+  /// Display order, 0 first. Not unique per product — reordering writes the
+  /// whole set in one transaction, and a unique index would collide midway
+  /// through any swap.
+  position Int @default(0)
+
+  createdAt DateTime @default(now())
+
+  @@index([productId, position])
+}
+
 model ProductVariant {
   id String @id @default(uuid())
 
@@ -424,14 +456,47 @@ model WishlistItem {
 }
 
 model Contact {
-  id        String   @id @default(uuid())
+  id        String        @id @default(uuid())
   name      String
   email     String
   subject   String
   message   String
-  status    ContactStatus   @default(PENDING)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  status    ContactStatus @default(PENDING)
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
 
   @@map("contacts")
+}
+
+/// Who changed what, from the admin side.
+///
+/// Written by an interceptor rather than by each service, so a new admin route
+/// is covered the day it ships instead of the day someone remembers to log it.
+/// Deliberately append-only: nothing in the app updates or deletes a row here.
+model AuditLog {
+  id String @id @default(uuid())
+
+  /// Kept even after the account is deleted, so the trail does not develop
+  /// holes. Hence a plain column rather than a foreign key.
+  actorId    String
+  actorEmail String
+
+  /// HTTP verb and route pattern, e.g. "PATCH /orders/admin/:id".
+  action String
+
+  /// The entity the route addressed, when the route has an :id.
+  targetId String?
+
+  /// Request body with secrets stripped, plus the resulting status code.
+  payload Json?
+  status  Int
+
+  ip        String?
+  requestId String?
+
+  createdAt DateTime @default(now())
+
+  @@index([actorId])
+  @@index([createdAt])
+  @@map("audit_logs")
 }

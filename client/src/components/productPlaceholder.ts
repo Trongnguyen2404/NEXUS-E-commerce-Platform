@@ -1,11 +1,4 @@
-/**
- * Inline placeholder for a product with no usable image.
- *
- * A data URI rather than an external service: via.placeholder.com — which this
- * app used to call — stopped responding, and a dead image host does not 404, it
- * hangs. Every card missing an image was holding a request open until the
- * browser gave up. A placeholder must never need the network.
- */
+
 const svg = `
 <svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 400 400">
   <rect width="400" height="400" fill="#F5F5F7"/>

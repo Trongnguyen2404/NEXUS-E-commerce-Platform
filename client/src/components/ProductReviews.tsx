@@ -1,18 +1,20 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { BadgeCheck, Loader2, Trash2 } from 'lucide-react';
+import { BadgeCheck, Loader2, MessageSquare, Trash2 } from 'lucide-react';
 import { toast } from 'react-toastify';
 import axiosClient, { getErrorMessage } from '../api/axiosClient';
 import { useAuthStore } from '../store/useAuthStore';
 import StarRating from './StarRating';
 import type { PaginatedReviews, Review } from '../types/api';
 
+// Props for the reviews block.
 interface Props {
   productId: string;
-  /** Lets the parent refresh the headline rating after a review is posted. */
+  
   onRatingChange?: () => void;
 }
 
+// Shows a product's rating summary, review list and the write-a-review form.
 const ProductReviews = ({ productId, onRatingChange }: Props) => {
   const { user, isAuthenticated } = useAuthStore();
 
@@ -45,8 +47,8 @@ const ProductReviews = ({ productId, onRatingChange }: Props) => {
     fetchReviews();
   }, [fetchReviews]);
 
-  // Pre-fill the form when the visitor has already reviewed this product, so
-  // posting again reads as editing rather than as a duplicate.
+  
+  
   useEffect(() => {
     if (!isAuthenticated) {
       setMyReview(null);
@@ -65,7 +67,7 @@ const ProductReviews = ({ productId, onRatingChange }: Props) => {
         setComment(mine.comment ?? '');
       })
       .catch(() => {
-        /* Not reviewed yet, or not signed in — nothing to pre-fill. */
+        
       });
 
     return () => {
@@ -130,12 +132,9 @@ const ProductReviews = ({ productId, onRatingChange }: Props) => {
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-start">
 
-        {/* Summary: average plus the star breakdown */}
         <div className="lg:col-span-4">
           <div className="bg-[#F5F5F7] rounded-3xl p-8">
             <div className="flex items-end gap-3 mb-2">
-              {/* An em dash at 5xl font-black renders as a solid black bar, which
-                  reads as a glitch. Show a muted placeholder instead. */}
               {summary && summary.total > 0 ? (
                 <>
                   <span className="text-5xl font-black tracking-tighter leading-none">
@@ -176,7 +175,6 @@ const ProductReviews = ({ productId, onRatingChange }: Props) => {
           </div>
         </div>
 
-        {/* Write form + the list itself */}
         <div className="lg:col-span-8 space-y-10">
 
           {isAuthenticated ? (
@@ -258,7 +256,7 @@ const ProductReviews = ({ productId, onRatingChange }: Props) => {
                         <div className="flex items-center gap-3 mb-1">
                           <StarRating value={review.rating} size={14} />
                           {review.isVerifiedPurchase && (
-                            <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-green-600">
+                            <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-state-success">
                               <BadgeCheck size={13} />
                               Verified purchase
                             </span>
@@ -269,13 +267,12 @@ const ProductReviews = ({ productId, onRatingChange }: Props) => {
                         </p>
                       </div>
 
-                      {/* Own review, or an admin moderating */}
                       {(review.userId === user?.id || user?.role === 'ADMIN') && (
                         <button
                           type="button"
                           onClick={() => handleDelete(review.id)}
                           aria-label="Delete review"
-                          className="p-2 text-gray-300 hover:text-red-500 transition-colors shrink-0"
+                          className="p-2 text-gray-300 hover:text-state-danger transition-colors shrink-0"
                         >
                           <Trash2 size={16} />
                         </button>
@@ -319,9 +316,17 @@ const ProductReviews = ({ productId, onRatingChange }: Props) => {
               )}
             </>
           ) : (
-            <p className="text-sm font-medium text-gray-400 py-8 text-center">
-              No reviews yet. Be the first to write one.
-            </p>
+            /* Sits in a well rather than floating as one grey line in a
+               screen-height gap under the form. */
+            <div className="mt-10 bg-[#F5F5F7] rounded-3xl px-8 py-12 text-center">
+              <MessageSquare size={32} className="mx-auto text-gray-300 mb-4" aria-hidden />
+              <h4 className="text-base font-black uppercase tracking-tight text-black mb-2">
+                No reviews yet
+              </h4>
+              <p className="text-sm font-medium text-gray-500 max-w-sm mx-auto">
+                Be the first to tell other buyers how this one holds up.
+              </p>
+            </div>
           )}
         </div>
       </div>

@@ -33,6 +33,7 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 
+// Payment endpoints: intents, confirmation, refunds and history.
 @Controller('payments')
 @UseGuards(JwtAuthGuard)
 @ApiTags('payments')
@@ -40,6 +41,7 @@ import {
 export class PaymentsController {
   constructor(private readonly paymentsService: PaymentsService) {}
 
+  // Opens a Stripe payment intent for an order.
   @Post('create-intent')
   @ApiOperation({
     summary: 'create payment intent',
@@ -62,6 +64,7 @@ export class PaymentsController {
     );
   }
 
+  // Confirms a succeeded payment and fulfils the order.
   @Post('confirm')
   @ApiOperation({
     summary: 'Confirm payment',
@@ -82,6 +85,7 @@ export class PaymentsController {
     return await this.paymentsService.confirmPayment(userId, confirmPaymentDto);
   }
 
+  // Refunds a payment; admin only.
   @Post('admin/:id/refund')
   @UseGuards(RolesGuard)
   @Roles(Role.ADMIN)
@@ -108,6 +112,7 @@ export class PaymentsController {
     return await this.paymentsService.refund(id, refundPaymentDto);
   }
 
+  // Lists the caller's payments.
   @Get()
   @ApiOperation({
     summary: 'Get all payments',
@@ -121,6 +126,7 @@ export class PaymentsController {
     return await this.paymentsService.findAll(userId);
   }
 
+  // Returns one payment by id.
   @Get(':id')
   @ApiParam({
     name: 'id',
@@ -142,7 +148,7 @@ export class PaymentsController {
     return await this.paymentsService.findOne(id, userId);
   }
 
-  // Get payment by order ID
+  // Returns the payment attached to an order.
   @Get('order/:orderId')
   @ApiParam({
     name: 'orderId',

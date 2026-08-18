@@ -12,6 +12,7 @@ import {
   Min,
 } from 'class-validator';
 
+// Body for creating a product variant.
 export class CreateVariantDto {
   @ApiProperty({ example: 'TSHIRT-M-BLACK' })
   @IsString()
@@ -56,8 +57,10 @@ export class CreateVariantDto {
   isActive?: boolean;
 }
 
+// Body for editing a variant; every field optional.
 export class UpdateVariantDto extends PartialType(CreateVariantDto) {}
 
+// Variant as returned by the API.
 export class VariantResponseDto {
   @ApiProperty() id: string;
   @ApiProperty() productId: string;

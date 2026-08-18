@@ -1,4 +1,3 @@
-// Refresh Token Strategy
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PassportStrategy } from '@nestjs/passport';
@@ -8,11 +7,11 @@ import { Request } from 'express';
 import * as crypto from 'crypto';
 import { REFRESH_TOKEN_COOKIE } from '@/modules/auth/auth.constants';
 
-// The token lives in an httpOnly cookie, never in a header the browser's
-// JavaScript could set — that is the whole point of moving it off localStorage.
+// Pulls the refresh token out of the httpOnly cookie.
 const fromRefreshCookie = (req: Request): string | null =>
   req?.cookies?.[REFRESH_TOKEN_COOKIE] ?? null;
 
+// Validates the refresh cookie against the hash stored on the user.
 @Injectable()
 export class RefreshTokenStrategy extends PassportStrategy(
   Strategy,
@@ -30,7 +29,7 @@ export class RefreshTokenStrategy extends PassportStrategy(
     });
   }
 
-  // Validate the refresh token
+  // Confirms the presented token matches the stored hash.
   async validate(req: Request, payload: { sub: string; email: string }) {
     const refreshToken = fromRefreshCookie(req);
 
@@ -59,8 +58,6 @@ export class RefreshTokenStrategy extends PassportStrategy(
     const storedToken = Buffer.from(user.refreshToken);
     const inputToken = Buffer.from(hashedInputToken);
 
-    // So sánh 2 chuỗi Hash với nhau. timingSafeEqual throws on a length
-    // mismatch, so that case is ruled out first.
     const refreshTokenMatches =
       storedToken.length === inputToken.length &&
       crypto.timingSafeEqual(inputToken, storedToken);

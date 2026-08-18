@@ -20,12 +20,13 @@ import {
 import { ApiTags } from '@nestjs/swagger';
 import { Role } from '@prisma/client';
 
+// Contact form submission plus admin-only inbox management.
 @ApiTags('contacts')
 @Controller('contacts')
 export class ContactsController {
   constructor(private readonly contactsService: ContactsService) {}
 
-  //create
+  // Records a message from the public contact form.
   @Post()
   async create(
     @Body() createContactDto: CreateContactDto,
@@ -33,7 +34,7 @@ export class ContactsController {
     return await this.contactsService.create(createContactDto);
   }
 
-  //get all conttacts
+  // Lists submitted messages; admin only.
   @Get()
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.ADMIN)
@@ -41,7 +42,7 @@ export class ContactsController {
     return await this.contactsService.findAll(queryDto);
   }
 
-  //get contact by id
+  // Returns one message; admin only.
   @Get(':id')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.ADMIN)
@@ -49,7 +50,7 @@ export class ContactsController {
     return await this.contactsService.findOne(id);
   }
 
-  //update a contact
+  // Updates a message's status or notes; admin only.
   @Patch(':id')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.ADMIN)
@@ -60,6 +61,7 @@ export class ContactsController {
     return await this.contactsService.update(id, updateContactDto);
   }
 
+  // Deletes a message; admin only.
   @Delete(':id')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.ADMIN)

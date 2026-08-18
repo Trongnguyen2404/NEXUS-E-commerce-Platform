@@ -5,6 +5,7 @@ import axiosClient, { getErrorMessage } from '../api/axiosClient';
 import ImageUpload from '../components/ImageUpload';
 import type { Category, PageResponse } from '../types/api';
 
+// Admin screen for creating and editing categories.
 const AdminCategories = () => {
   const [categories, setCategories] = useState<Category[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -77,7 +78,6 @@ const AdminCategories = () => {
     <div className="min-h-screen bg-[#EDEDF0] py-12 px-4 sm:px-8">
       <div className="max-w-[1000px] mx-auto">
         
-        {/* HEADER */}
         <div className="bg-white rounded-[2rem] p-8 sm:p-10 mb-8 border border-gray-300 shadow-sm flex flex-col sm:flex-row justify-between items-start sm:items-end gap-6">
           <div>
             <h1 className="text-4xl sm:text-5xl font-black uppercase tracking-tighter text-black">Categories</h1>
@@ -88,7 +88,6 @@ const AdminCategories = () => {
           </button>
         </div>
 
-        {/* LIST CATEGORIES */}
         <div className="bg-white rounded-[2.5rem] p-6 sm:p-10 border border-gray-300 shadow-sm">
           <table className="w-full text-left border-collapse">
             <thead>
@@ -130,25 +129,22 @@ const AdminCategories = () => {
         </div>
       </div>
 
-      {/* MODAL */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setIsModalOpen(false)}></div>
           
-          {/* Mở rộng Modal thành max-w-4xl để chứa 2 cột */}
           <div className="bg-white rounded-[2.5rem] w-full max-w-4xl relative z-10 shadow-2xl overflow-hidden flex flex-col">
             <div className="p-8 border-b border-gray-200 flex justify-between items-center bg-[#F5F5F7]">
               <h2 className="text-2xl font-black uppercase tracking-tight text-black">{editingId ? 'Edit Category' : 'New Category'}</h2>
-              <button onClick={() => setIsModalOpen(false)} className="p-2 bg-gray-200 hover:bg-red-500 hover:text-white rounded-full"><X size={20} /></button>
+              <button onClick={() => setIsModalOpen(false)} className="p-2 bg-gray-200 hover:bg-state-danger hover:text-white rounded-full"><X size={20} /></button>
             </div>
             
             <div className="p-8">
               <form id="cat-form" onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-12 gap-8">
                 
-                {/* CỘT TRÁI: NHẬP THÔNG TIN */}
                 <div className="md:col-span-7 space-y-6">
                   <div className="space-y-2">
-                    <label className="text-[10px] font-black uppercase text-gray-500 tracking-widest">Name <span className="text-red-500">*</span></label>
+                    <label className="text-[10px] font-black uppercase text-gray-500 tracking-widest">Name <span className="text-state-danger">*</span></label>
                     <input required type="text" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className="w-full bg-[#F5F5F7] border-2 border-transparent focus:border-black rounded-2xl p-4 text-sm font-bold text-black outline-none transition-all" />
                   </div>
                   <div className="space-y-2">
@@ -157,13 +153,13 @@ const AdminCategories = () => {
                   </div>
                 </div>
 
-                {/* CỘT PHẢI: PREVIEW ẢNH GIỐNG PRODUCT */}
                 <div className="md:col-span-5">
                   <ImageUpload
                     value={formData.imageUrl}
                     onChange={(url) => setFormData({ ...formData, imageUrl: url })}
                     folder="categories"
                     label="Category image"
+                    aspect={4 / 3}
                   />
                 </div>
 

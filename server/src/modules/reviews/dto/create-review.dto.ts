@@ -9,6 +9,7 @@ import {
   Min,
 } from 'class-validator';
 
+// Body for posting or editing a product review.
 export class CreateReviewDto {
   @ApiProperty({
     description: 'Star rating',

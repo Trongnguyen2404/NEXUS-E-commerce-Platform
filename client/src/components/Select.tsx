@@ -2,48 +2,41 @@ import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from
 import { createPortal } from 'react-dom';
 import { Check, ChevronDown } from 'lucide-react';
 
+// One option in the custom dropdown.
 export interface SelectOption<T extends string> {
   value: T;
   label: string;
-  /** Optional swatch — used by the order status picker. */
+  
   dotClassName?: string;
 }
 
+// Props for the custom dropdown.
 interface Props<T extends string> {
   value: T;
   onChange: (value: T) => void;
-  /** readonly so an `as const` list can be passed straight in. */
+  
   options: readonly SelectOption<T>[];
-  /** Shown when `value` matches no option, e.g. an empty filter. */
+  
   placeholder?: string;
   id?: string;
   ariaLabel?: string;
-  /** Replaces the trigger's default look entirely. */
+  
   className?: string;
   disabled?: boolean;
 }
 
-/** Tallest the panel gets before it scrolls internally. */
+
 const MAX_PANEL_HEIGHT = 320;
-/** Below this a panel is not worth showing, so it is allowed to overhang. */
-const MIN_PANEL_HEIGHT = 120;
-/** Breathing room against the window edges. */
+
 const MARGIN = 8;
-/** Space between the trigger and the panel. */
+
 const GAP = 6;
 
 const TRIGGER_BASE =
   'inline-flex items-center justify-between gap-3 rounded-xl outline-none transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed focus-visible:ring-2 focus-visible:ring-black';
 
-/**
- * A select that can actually be styled.
- *
- * A native <select> renders its option list through the operating system, so
- * none of it — font, colours, the blue highlight, the spacing — responds to
- * CSS. The only way to control that list is to stop using one, which means
- * rebuilding what the native element gave away for free: keyboard navigation,
- * type-ahead, focus handling and the ARIA that screen readers rely on.
- */
+
+// Styled dropdown with keyboard navigation and type-ahead.
 function Select<T extends string>({
   value,
   onChange,
@@ -62,7 +55,7 @@ function Select<T extends string>({
 
   const [isOpen, setIsOpen] = useState(false);
   const [rect, setRect] = useState<DOMRect | null>(null);
-  /** Index the keyboard is on, which is not necessarily the selected one. */
+  
   const [activeIndex, setActiveIndex] = useState(0);
 
   const selectedIndex = options.findIndex((o) => o.value === value);
@@ -90,7 +83,7 @@ function Select<T extends string>({
     close();
   };
 
-  // Measured before paint so the panel never renders at the wrong spot first.
+  
   useLayoutEffect(() => {
     if (isOpen) place();
   }, [isOpen, place]);
@@ -98,11 +91,18 @@ function Select<T extends string>({
   useEffect(() => {
     if (!isOpen) return;
 
-    // Capture phase: the trigger may sit inside its own scrolling container
-    // (the orders table scrolls sideways), and those events do not bubble.
-    const reposition = () => place();
-    window.addEventListener('scroll', reposition, true);
-    window.addEventListener('resize', reposition);
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    const dismiss = () => close(false);
+    window.addEventListener('scroll', dismiss, true);
+    window.addEventListener('resize', dismiss);
 
     const onPointerDown = (e: PointerEvent) => {
       const target = e.target as Node;
@@ -113,13 +113,13 @@ function Select<T extends string>({
     document.addEventListener('pointerdown', onPointerDown);
 
     return () => {
-      window.removeEventListener('scroll', reposition, true);
-      window.removeEventListener('resize', reposition);
+      window.removeEventListener('scroll', dismiss, true);
+      window.removeEventListener('resize', dismiss);
       document.removeEventListener('pointerdown', onPointerDown);
     };
   }, [isOpen, place]);
 
-  // Keep the highlighted row in view when arrowing past the fold.
+  
   useEffect(() => {
     if (!isOpen) return;
     panelRef.current
@@ -127,13 +127,13 @@ function Select<T extends string>({
       ?.scrollIntoView({ block: 'nearest' });
   }, [isOpen, activeIndex]);
 
-  /** Jump to the next option starting with the typed letter. */
+  
   const typeAhead = useRef({ query: '', at: 0 });
   const searchByLetter = (letter: string) => {
     const now = Date.now();
     const t = typeAhead.current;
-    // Letters typed in quick succession build one query — "sh" finds SHIPPED
-    // rather than jumping to S, then to H.
+    
+    
     t.query = now - t.at < 600 ? t.query + letter : letter;
     t.at = now;
 
@@ -187,34 +187,45 @@ function Select<T extends string>({
     }
   };
 
-  /**
-   * Where the panel goes, recomputed every render so scrolling and resizing
-   * are reflected straight away.
-   *
-   * Opens downwards unless there is more room the other way. The subtlety is
-   * the top: the site nav is `sticky top-0`, and this panel sits above it in
-   * the stacking order, so a drop-up that is merely inside the window still
-   * ends up covering the logo and the whole menu. Height is therefore clamped
-   * to the space between the trigger and the bottom of whatever is pinned up
-   * there, and the list scrolls if that is not enough.
-   */
+  
   const layout = (() => {
     if (!rect) return null;
 
     const inset =
       document.querySelector('[data-sticky-top]')?.getBoundingClientRect().bottom ?? 0;
+    
+    const ceiling = Math.max(inset, 0) + MARGIN;
 
     const below = window.innerHeight - rect.bottom - GAP - MARGIN;
-    const above = rect.top - Math.max(inset, 0) - GAP - MARGIN;
+    const above = rect.top - ceiling - GAP;
     const up = above > below && below < Math.min(MAX_PANEL_HEIGHT, 200);
+
+    
+    const left = Math.max(MARGIN, Math.min(rect.left, window.innerWidth - rect.width - MARGIN));
+
+    if (up) {
+      
+      
+      
+      
+      return {
+        up,
+        left,
+        bottom: window.innerHeight - rect.top + GAP,
+        maxHeight: Math.min(MAX_PANEL_HEIGHT, Math.max(above, 0)),
+      };
+    }
+
+    
+    
+    
+    const top = Math.max(rect.bottom + GAP, ceiling);
 
     return {
       up,
-      // The floor only matters on a window too short for either side; there,
-      // a readable panel that overhangs beats a 20px sliver.
-      maxHeight: Math.min(MAX_PANEL_HEIGHT, Math.max(up ? above : below, MIN_PANEL_HEIGHT)),
-      // Keep it on screen when the trigger is close to the right edge.
-      left: Math.max(MARGIN, Math.min(rect.left, window.innerWidth - rect.width - MARGIN)),
+      left,
+      top,
+      maxHeight: Math.min(MAX_PANEL_HEIGHT, Math.max(window.innerHeight - top - MARGIN, 0)),
     };
   })();
 
@@ -250,8 +261,6 @@ function Select<T extends string>({
         />
       </button>
 
-      {/* Rendered into <body>: an absolutely positioned panel would be clipped
-          by any ancestor that scrolls, and the orders table is one. */}
       {isOpen &&
         rect &&
         layout &&
@@ -269,9 +278,7 @@ function Select<T extends string>({
               minWidth: rect.width,
               maxWidth: Math.max(rect.width, 320),
               maxHeight: layout.maxHeight,
-              ...(layout.up
-                ? { bottom: window.innerHeight - rect.top + GAP }
-                : { top: rect.bottom + GAP }),
+              ...(layout.up ? { bottom: layout.bottom } : { top: layout.top }),
             }}
             className={`z-[60] overflow-y-auto overscroll-contain rounded-2xl border border-gray-200 bg-white p-1.5 shadow-2xl shadow-black/10 motion-reduce:animate-none ${
               layout.up ? 'animate-pop-up' : 'animate-pop-down'

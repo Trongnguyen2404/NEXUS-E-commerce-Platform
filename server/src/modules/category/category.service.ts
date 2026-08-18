@@ -11,11 +11,16 @@ import { QueryCategoryDto } from '@/modules/category/dto/query-category.dto';
 import { Category, Prisma } from '@prisma/client';
 import { UpdateCategoryDto } from '@/modules/category/dto/update-category.dto';
 
+const LIVE_PRODUCT_COUNT = {
+  _count: { select: { products: { where: { isActive: true } } } },
+} as const;
+
+// Category reads and writes, plus the counts shown next to each one.
 @Injectable()
 export class CategoryService {
   constructor(private prisma: PrismaService) {}
 
-  // Create a new category
+  // Creates a category, deriving a slug and rejecting duplicate names.
   async create(
     createCategoryDto: CreateCategoryDto,
   ): Promise<CategoryResponseDto> {
@@ -49,7 +54,7 @@ export class CategoryService {
     return this.formatCategory(category, 0);
   }
 
-  // Get all categories with optional filters and pagination
+  // Lists categories, hiding inactive ones unless asked for.
   async findAll(queryDto: QueryCategoryDto): Promise<{
     data: CategoryResponseDto[];
     meta: { total: number; page: number; limit: number; totalPages: number };
@@ -58,9 +63,10 @@ export class CategoryService {
 
     const where: Prisma.CategoryWhereInput = {};
 
-    if (isActive !== undefined) {
-      where.isActive = isActive;
-    }
+    // Active-only unless asked otherwise, matching the product listing. The
+    // filter used to apply only when isActive was passed, so a category taken
+    // offline stayed on the storefront with all its products.
+    where.isActive = isActive ?? true;
 
     if (search) {
       where.OR = [
@@ -80,11 +86,7 @@ export class CategoryService {
       skip: (page - 1) * limit,
       take: limit,
       orderBy: { createdAt: 'desc' },
-      include: {
-        _count: {
-          select: { products: true },
-        },
-      },
+      include: LIVE_PRODUCT_COUNT,
     });
 
     return {
@@ -100,15 +102,11 @@ export class CategoryService {
     };
   }
 
-  // Get category by ID
+  // Loads one category by id.
   async findOne(id: string): Promise<CategoryResponseDto> {
     const category = await this.prisma.category.findUnique({
       where: { id },
-      include: {
-        _count: {
-          select: { products: true },
-        },
-      },
+      include: LIVE_PRODUCT_COUNT,
     });
 
     if (!category) {
@@ -118,15 +116,11 @@ export class CategoryService {
     return this.formatCategory(category, Number(category._count.products));
   }
 
-  // Get category by slug
+  // Loads one category by slug.
   async findBySlug(slug: string): Promise<CategoryResponseDto> {
     const category = await this.prisma.category.findUnique({
       where: { slug },
-      include: {
-        _count: {
-          select: { products: true },
-        },
-      },
+      include: LIVE_PRODUCT_COUNT,
     });
 
     if (!category) {
@@ -136,7 +130,7 @@ export class CategoryService {
     return this.formatCategory(category, Number(category._count.products));
   }
 
-  // Updatecategory
+  // Updates a category and re-derives the slug when the name changes.
   async update(
     id: string,
     updateCategoryDto: UpdateCategoryDto,
@@ -167,11 +161,7 @@ export class CategoryService {
     const updatedCategory = await this.prisma.category.update({
       where: { id },
       data: updateCategoryDto,
-      include: {
-        _count: {
-          select: { products: true },
-        },
-      },
+      include: LIVE_PRODUCT_COUNT,
     });
 
     return this.formatCategory(
@@ -180,7 +170,7 @@ export class CategoryService {
     );
   }
 
-  // Remove a catgory
+  // Deletes a category, refusing while products still point at it.
   async remove(id: string): Promise<{ message: string }> {
     const category = await this.prisma.category.findUnique({
       where: { id },
@@ -210,6 +200,7 @@ export class CategoryService {
     return { message: `Category delete successfully` };
   }
 
+  // Shapes a category row into its API response.
   private formatCategory(
     category: Category,
     productCount: number,

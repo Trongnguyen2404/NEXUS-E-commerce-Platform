@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { OrdersController } from '@/modules/orders/orders.controller';
 import { OrdersService } from '@/modules/orders/orders.service';
 
+// Order feature module.
 @Module({
   controllers: [OrdersController],
   providers: [OrdersService],

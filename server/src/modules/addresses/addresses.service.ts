@@ -7,20 +7,23 @@ import {
   UpdateAddressDto,
 } from '@/modules/addresses/dto/address.dto';
 
+// Reads and writes a user's address book.
 @Injectable()
 export class AddressesService {
   constructor(private prisma: PrismaService) {}
 
+  // Returns every address the user owns, default first.
   async findAll(userId: string): Promise<AddressResponseDto[]> {
     const addresses = await this.prisma.address.findMany({
       where: { userId },
-      // Default first, then newest — the one checkout preselects sits on top.
+
       orderBy: [{ isDefault: 'desc' }, { createdAt: 'desc' }],
     });
 
     return addresses.map((address) => this.map(address));
   }
 
+  // Creates an address, making it default when it is the first one.
   async create(
     userId: string,
     dto: CreateAddressDto,
@@ -28,8 +31,7 @@ export class AddressesService {
     const existingCount = await this.prisma.address.count({
       where: { userId },
     });
-    // The first address saved is the default whether or not it was asked for,
-    // otherwise checkout has nothing to preselect.
+
     const shouldBeDefault = dto.isDefault ?? existingCount === 0;
 
     const address = await this.prisma.$transaction(async (tx) => {
@@ -48,6 +50,7 @@ export class AddressesService {
     return this.map(address);
   }
 
+  // Updates an address the caller owns.
   async update(
     id: string,
     userId: string,
@@ -64,14 +67,13 @@ export class AddressesService {
     return this.map(address);
   }
 
+  // Deletes an address and promotes another to default if needed.
   async remove(id: string, userId: string): Promise<{ message: string }> {
     const address = await this.mustOwn(id, userId);
 
     await this.prisma.$transaction(async (tx) => {
       await tx.address.delete({ where: { id } });
 
-      // Deleting the default promotes the next one, so the account never ends
-      // up with several addresses and no default.
       if (address.isDefault) {
         const next = await tx.address.findFirst({
           where: { userId },
@@ -89,6 +91,7 @@ export class AddressesService {
     return { message: 'Address deleted' };
   }
 
+  // Marks one address default and clears the flag on the rest.
   async setDefault(id: string, userId: string): Promise<AddressResponseDto> {
     await this.mustOwn(id, userId);
 
@@ -100,7 +103,7 @@ export class AddressesService {
     return this.map(address);
   }
 
-  /** Orders reference addresses by id, so ownership has to be proven first. */
+  // Loads an address, throwing unless the caller owns it.
   private async mustOwn(id: string, userId: string): Promise<Address> {
     const address = await this.prisma.address.findFirst({
       where: { id, userId },
@@ -109,6 +112,7 @@ export class AddressesService {
     return address;
   }
 
+  // Clears the default flag from the user's other addresses.
   private async clearDefault(
     tx: { address: { updateMany: (args: unknown) => Promise<unknown> } },
     userId: string,
@@ -119,7 +123,7 @@ export class AddressesService {
     });
   }
 
-  /** Must match OrdersService.formatAddress — both render the same snapshot. */
+  // Flattens an address into the single line stored on an order.
   static format(address: Address): string {
     return [
       address.fullName,
@@ -135,6 +139,7 @@ export class AddressesService {
       .join(', ');
   }
 
+  // Shapes a database address into its API response.
   private map(address: Address): AddressResponseDto {
     return {
       id: address.id,

@@ -1,14 +1,19 @@
-import { useState, useEffect, useCallback } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Search, ChevronLeft, ChevronRight, Loader2, SlidersHorizontal } from 'lucide-react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import { Search, ChevronLeft, ChevronRight, SlidersHorizontal } from 'lucide-react';
 import axiosClient from '../api/axiosClient';
-import StarRating from '../components/StarRating';
-import WishlistButton from '../components/WishlistButton';
 import Select from '../components/Select';
-import { PRODUCT_PLACEHOLDER } from '../components/productPlaceholder';
+import ProductCard from '../components/ProductCard';
+import { pickNewArrivals } from '../components/newArrivals';
+import useQuickAdd from '../hooks/useQuickAdd';
 import type { Category, PageResponse, PaginatedResponse, Product } from '../types/api';
+import useDocumentMeta from '../hooks/useDocumentMeta';
 
+// Paging metadata for the product listing.
 type MetaData = PaginatedResponse<Product>['meta'];
+
+
+const PAGE_SIZE = 8;
 
 const SORT_OPTIONS = [
   { value: 'newest', label: 'Newest' },
@@ -19,11 +24,12 @@ const SORT_OPTIONS = [
   { value: 'name_desc', label: 'Name: Z–A' },
 ] as const;
 
+// Product listing with search, filters, sorting and paging.
 const Products = () => {
-  const navigate = useNavigate();
+  useDocumentMeta({ title: 'Pro Gear', description: 'Browse the full NEXUS catalogue — audio, accessories, displays and desk gear. Filter by price, availability and rating.' });
+  const { quickAdd, addingId } = useQuickAdd();
 
-  // Filters live in the URL so a filtered view can be shared, bookmarked and
-  // survives a refresh or the browser back button.
+  // Every filter lives in the URL so a filtered grid stays shareable.
   const [searchParams, setSearchParams] = useSearchParams();
 
   const search = searchParams.get('search') ?? '';
@@ -40,11 +46,11 @@ const Products = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [showFilters, setShowFilters] = useState(false);
 
-  // The search box needs its own state so typing stays responsive while the
-  // request is debounced.
+  
+  
   const [searchInput, setSearchInput] = useState(search);
 
-  /** Writes one or more params, always resetting to page 1 unless paging. */
+  
   const updateParams = useCallback(
     (changes: Record<string, string | null>, keepPage = false) => {
       setSearchParams(
@@ -69,7 +75,9 @@ const Products = () => {
   const activeFilterCount =
     (category ? 1 : 0) + (minPrice ? 1 : 0) + (maxPrice ? 1 : 0) + (inStock ? 1 : 0);
 
-  // Debounce only the text box; the other controls apply immediately.
+  const newArrivals = useMemo(() => pickNewArrivals(products), [products]);
+
+  
   useEffect(() => {
     if (searchInput === search) return;
     const timer = setTimeout(() => updateParams({ search: searchInput }), 500);
@@ -90,10 +98,10 @@ const Products = () => {
         const response = await axiosClient.get<PaginatedResponse<Product>>('/products', {
           params: {
             page,
-            limit: 8,
+            limit: PAGE_SIZE,
             sort,
-            // Empty strings would be sent as `?category=`, which the DTO would
-            // reject; omit them instead.
+            
+            
             ...(search ? { search } : {}),
             ...(category ? { category } : {}),
             ...(minPrice ? { minPrice } : {}),
@@ -118,7 +126,6 @@ const Products = () => {
     <div className="min-h-screen bg-white pb-16">
       <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 pt-12">
 
-        {/* Header & Search */}
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-8 mb-8">
           <div>
             <h1 className="text-4xl lg:text-5xl font-black tracking-tighter text-black uppercase">Pro Gear</h1>
@@ -139,7 +146,6 @@ const Products = () => {
           </div>
         </div>
 
-        {/* Sort + filter toggle */}
         <div className="flex flex-wrap items-center gap-3 mb-6">
           <button
             type="button"
@@ -236,49 +242,65 @@ const Products = () => {
         )}
 
         {isLoading ? (
-          <div className="h-96 flex items-center justify-center">
-            <Loader2 className="animate-spin text-black" size={40} />
+          
+          <div
+            className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6"
+            aria-busy="true"
+            aria-label="Loading products"
+          >
+            {Array.from({ length: PAGE_SIZE }, (_, i) => (
+              <div
+                key={i}
+                className="flex flex-col bg-white border border-gray-200 rounded-3xl overflow-hidden animate-pulse motion-reduce:animate-none"
+              >
+                <div className="aspect-square bg-surface-muted" />
+                <div className="p-5 space-y-3">
+                  <div className="h-2.5 w-16 bg-surface-sunken rounded" />
+                  <div className="h-3.5 w-3/4 bg-surface-sunken rounded" />
+                  <div className="h-4 w-20 bg-surface-sunken rounded" />
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : products.length === 0 ? (
+          
+          <div className="py-24 text-center">
+            <div className="w-16 h-16 rounded-full bg-surface-muted flex items-center justify-center mx-auto mb-6">
+              <Search size={26} className="text-gray-300" aria-hidden />
+            </div>
+            <h2 className="text-2xl font-black uppercase tracking-tight mb-3">
+              Nothing matched
+            </h2>
+            <p className="text-sm font-medium text-gray-500 max-w-md mx-auto mb-8">
+              {search
+                ? <>No products match &ldquo;{search}&rdquo;{activeFilterCount > 0 && ' with the filters you have on'}.</>
+                : 'No products match the filters you have on.'}
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                setSearchInput('');
+                updateParams({ search: null, category: null, minPrice: null, maxPrice: null, inStock: null });
+              }}
+              className="bg-black text-white px-8 py-4 rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-gray-800 transition-colors"
+            >
+              Show everything
+            </button>
           </div>
         ) : (
           <>
-            {/* Each card is one bounded surface. Previously only the image tile
-                had a background and the text sat loose on the page, so the cards
-                bled into the white and the grid was tiring to scan. */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
               {products.map((p) => (
-                <div
+                <ProductCard
                   key={p.id}
-                  onClick={() => navigate(`/products/${p.id}`)}
-                  className="group cursor-pointer flex flex-col bg-white border border-gray-200 rounded-3xl overflow-hidden hover:border-gray-400 hover:shadow-lg transition-all"
-                >
-                  <div className="relative aspect-square bg-surface-muted flex items-center justify-center p-6 overflow-hidden">
-                    <img
-                      src={p.imageUrl || PRODUCT_PLACEHOLDER}
-                      onError={(e) => { e.currentTarget.src = PRODUCT_PLACEHOLDER; }}
-                      className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-700 ease-out"
-                      alt={p.name}
-                    />
-                    <WishlistButton productId={p.id} className="absolute top-3 right-3" />
-                  </div>
-
-                  <div className="flex flex-col flex-1 p-5 border-t border-gray-100">
-                    <p className="text-[10px] font-bold text-brand-ink uppercase tracking-[0.15em] mb-1.5">{p.category}</p>
-                    <h3 className="text-base font-bold text-black leading-snug mb-2">{p.name}</h3>
-
-                    {p.reviewCount > 0 && (
-                      <div className="flex items-center gap-1.5 mb-2">
-                        <StarRating value={p.rating} size={12} />
-                        <span className="text-[10px] font-bold text-gray-400">({p.reviewCount})</span>
-                      </div>
-                    )}
-
-                    <p className="text-lg font-black text-black mt-auto pt-2">${Number(p.price).toFixed(2)}</p>
-                  </div>
-                </div>
+                  product={p}
+                  onQuickAdd={quickAdd}
+                  isAdding={addingId === p.id}
+                  isNew={newArrivals.has(p.id)}
+                />
               ))}
             </div>
 
-            {/* Pagination Controls - Vuông vức */}
             {meta && meta.totalPages > 1 && (
               <div className="mt-12 flex justify-center items-center gap-2 border-t border-gray-100 pt-8">
                 <button

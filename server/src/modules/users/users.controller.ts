@@ -8,8 +8,10 @@ import {
   Param,
   Patch,
   Req,
+  Res,
   UseGuards,
 } from '@nestjs/common';
+import type { Response } from 'express';
 import {
   ApiBearerAuth,
   ApiBody,
@@ -27,7 +29,12 @@ import { Roles } from '@/common/decorators/roles.decorator';
 import { Role } from '@prisma/client';
 import { UpdateUserDto } from '@/modules/users/dto/update-user.dto';
 import { ChangePasswordDto } from '@/modules/users/dto/change-password.dto';
+import {
+  REFRESH_TOKEN_COOKIE,
+  refreshTokenCookieOptions,
+} from '@/modules/auth/auth.constants';
 
+// Profile endpoints for the caller plus admin-only user management.
 @ApiTags('users')
 @ApiBearerAuth('JWT-auth')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -35,7 +42,7 @@ import { ChangePasswordDto } from '@/modules/users/dto/change-password.dto';
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
-  //   Get current user profile
+  // Returns the signed-in user's profile.
   @Get('me')
   @ApiOperation({ summary: 'Get current user profile' })
   @ApiResponse({
@@ -48,7 +55,7 @@ export class UsersController {
     return await this.usersService.findOne(req.user.id);
   }
 
-  // Get all users (for admin purposes)
+  // Lists every user; admin only.
   @Get()
   @Roles(Role.ADMIN)
   @ApiOperation({ summary: 'Get all users' })
@@ -62,7 +69,7 @@ export class UsersController {
     return await this.usersService.findAll();
   }
 
-  // Get user by ID (for admin purposes)
+  // Returns one user by id; admin only.
   @Get(':id')
   @Roles(Role.ADMIN)
   @ApiOperation({ summary: 'Get user by ID' })
@@ -77,7 +84,7 @@ export class UsersController {
     return await this.usersService.findOne(id);
   }
 
-  // Update current user profile
+  // Edits the signed-in user's profile.
   @Patch('me')
   @ApiOperation({ summary: 'Update current user profile' })
   @ApiBody({ type: UpdateUserDto })
@@ -95,20 +102,34 @@ export class UsersController {
     return await this.usersService.update(userId, updateUserDto);
   }
 
-  // Change current user password
+  // Changes the signed-in user's password.
   @Patch('me/password')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Change current user password' })
+  @ApiOperation({
+    summary: 'Change current user password',
+    description:
+      'Replaces the password and signs every session out, so a stolen refresh cookie stops working immediately.',
+  })
   @ApiResponse({ status: 200, description: 'Password changed successfully' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   async changePassword(
     @GetUser('id') userId: string,
     @Body() changePasswordDto: ChangePasswordDto,
+    @Res({ passthrough: true }) res: Response,
   ): Promise<{ message: string }> {
-    return await this.usersService.changePassword(userId, changePasswordDto);
+    const result = await this.usersService.changePassword(
+      userId,
+      changePasswordDto,
+    );
+
+    // The stored token was just revoked; drop the cookie holding it too so the
+    // browser stops presenting a refresh token the server will never accept.
+    res.clearCookie(REFRESH_TOKEN_COOKIE, refreshTokenCookieOptions());
+
+    return result;
   }
 
-  // Delete current user account
+  // Deletes the signed-in user's own account.
   @Delete('me')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Delete current user account' })
@@ -123,7 +144,7 @@ export class UsersController {
     return await this.usersService.remove(userId);
   }
 
-  // Delete user by ID (for admin purposes)
+  // Deletes any user; admin only.
   @Delete(':id')
   @Roles(Role.ADMIN)
   @HttpCode(HttpStatus.OK)

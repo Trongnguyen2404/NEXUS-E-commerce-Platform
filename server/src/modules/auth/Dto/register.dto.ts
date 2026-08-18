@@ -1,5 +1,3 @@
-//Data transfer object (DTO) for user registration
-
 import { ApiProperty } from '@nestjs/swagger';
 import {
   IsEmail,
@@ -10,6 +8,7 @@ import {
   MinLength,
 } from 'class-validator';
 
+// Body for creating a new account.
 export class RegisterDto {
   @ApiProperty({
     description: 'User email address',

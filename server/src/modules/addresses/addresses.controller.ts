@@ -30,6 +30,7 @@ import {
   RelaxedThrottle,
 } from '@/common/decorators/custom-throttler.decorator';
 
+// Endpoints for a signed-in user's saved shipping addresses.
 @ApiTags('addresses')
 @ApiBearerAuth('JWT-auth')
 @UseGuards(JwtAuthGuard)
@@ -37,6 +38,7 @@ import {
 export class AddressesController {
   constructor(private readonly addressesService: AddressesService) {}
 
+  // Lists the caller's addresses, default first.
   @Get()
   @RelaxedThrottle()
   @ApiOperation({ summary: 'Your saved addresses, default first' })
@@ -45,6 +47,7 @@ export class AddressesController {
     return await this.addressesService.findAll(userId);
   }
 
+  // Saves a new address for the caller.
   @Post()
   @ModerateThrottle()
   @ApiOperation({
@@ -56,6 +59,7 @@ export class AddressesController {
     return await this.addressesService.create(userId, dto);
   }
 
+  // Makes one address the caller's default.
   @Patch(':id/default')
   @ModerateThrottle()
   @ApiOperation({ summary: 'Make this your default shipping address' })
@@ -66,6 +70,7 @@ export class AddressesController {
     return await this.addressesService.setDefault(id, userId);
   }
 
+  // Edits one of the caller's addresses.
   @Patch(':id')
   @ModerateThrottle()
   @ApiOperation({ summary: 'Update a saved address' })
@@ -80,6 +85,7 @@ export class AddressesController {
     return await this.addressesService.update(id, userId, dto);
   }
 
+  // Deletes one of the caller's addresses.
   @Delete(':id')
   @ModerateThrottle()
   @ApiOperation({

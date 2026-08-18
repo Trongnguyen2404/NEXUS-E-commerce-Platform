@@ -24,6 +24,12 @@ import {
   frontendUrl,
 } from '@/modules/auth/auth.constants';
 
+// A cost-12 hash of a constant nobody can sign in with. Verified against it
+// when the email is unknown so both login outcomes take the same time.
+const DUMMY_PASSWORD_HASH =
+  '$2b$12$PucbURZRExRT9YLLk6J./OJpLujusAUwKx8UiUO4Cc0M65x39CksO';
+
+// Account creation, sign-in, token rotation and password recovery.
 @Injectable()
 export class AuthService {
   private readonly SALT_ROUNDS = 12;
@@ -36,6 +42,7 @@ export class AuthService {
     private mailService: MailService,
   ) {}
 
+  // Creates the account, hashes the password and issues the first token pair.
   async register(registerDto: RegisterDto): Promise<AuthResponseDto> {
     const { email, password, firstName, lastName } = registerDto;
 
@@ -76,13 +83,16 @@ export class AuthService {
       };
     } catch (e) {
       console.error('Error during user registration:', e);
+      // The second argument is the client-visible description, not a cause —
+      // passing the raw error here would have leaked it into the response.
       throw new InternalServerErrorException(
         'An error occurred while registering the user',
-        e,
+        { cause: e instanceof Error ? e : undefined },
       );
     }
   }
 
+  // Signs a fresh access and refresh token pair.
   private async generateTokens(
     userId: string,
     email: string,
@@ -93,22 +103,19 @@ export class AuthService {
     if (!refreshSecret) {
       throw new Error('JWT_REFRESH_SECRET is not defined');
     }
-    // 1. Dùng NestJS JWT tạo Access Token (Nó tự lấy JWT_SECRET chuẩn)
+
     const accessToken = await this.jwtService.signAsync(payload, {
       expiresIn: '15m',
     });
 
-    // 2. Dùng jwt gốc tạo Refresh Token ĐỂ ÉP NÓ DÙNG ĐÚNG refreshSecret
-    const refreshToken = jwt.sign(
-      { ...payload, refreshId },
-      refreshSecret, // Truyền trực tiếp chìa khóa vào đây, không thể sai lệch được nữa
-      { expiresIn: '7d' },
-    );
+    const refreshToken = jwt.sign({ ...payload, refreshId }, refreshSecret, {
+      expiresIn: '7d',
+    });
 
     return { accessToken, refreshToken };
   }
 
-  // Update the refresh token in the database
+  // Stores the hashed refresh token against the user.
   private async updateRefreshToken(
     userId: string,
     refreshToken: string,
@@ -123,7 +130,7 @@ export class AuthService {
     });
   }
 
-  // Refresh access token
+  // Issues a new token pair for a user whose refresh token checked out.
   async refreshTokens(userId: string): Promise<AuthResponseDto> {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
@@ -149,7 +156,7 @@ export class AuthService {
     };
   }
 
-  //log out
+  // Revokes the stored refresh token so the session cannot be resumed.
   async logout(userId: string): Promise<void> {
     await this.prisma.user.update({
       where: { id: userId },
@@ -157,13 +164,7 @@ export class AuthService {
     });
   }
 
-  /**
-   * Starts a password reset.
-   *
-   * Always reports success, even for an address that has no account: a
-   * different response for "unknown email" would turn this endpoint into a
-   * way to enumerate who has registered.
-   */
+  // Emails a single-use reset link, staying silent about unknown addresses.
   async forgotPassword(email: string): Promise<{ message: string }> {
     const genericResponse = {
       message:
@@ -176,14 +177,11 @@ export class AuthService {
       return genericResponse;
     }
 
-    // Any earlier link stops working the moment a new one is requested.
     await this.prisma.passwordResetToken.updateMany({
       where: { userId: user.id, usedAt: null },
       data: { usedAt: new Date() },
     });
 
-    // The raw token only ever exists here and in the email; the database
-    // holds nothing but its hash.
     const rawToken = randomBytes(32).toString('hex');
 
     await this.prisma.passwordResetToken.create({
@@ -207,7 +205,7 @@ export class AuthService {
     return genericResponse;
   }
 
-  /** Completes a reset. The token is single-use and expires. */
+  // Validates the reset token and replaces the password.
   async resetPassword(
     token: string,
     newPassword: string,
@@ -216,8 +214,6 @@ export class AuthService {
       where: { tokenHash: this.hashToken(token) },
     });
 
-    // One message for missing, already-used and expired alike — no hint
-    // about which token strings happen to exist.
     const invalid = new BadRequestException(
       'This reset link is invalid or has expired',
     );
@@ -233,9 +229,7 @@ export class AuthService {
         where: { id: record.userId },
         data: {
           password: hashedPassword,
-          // Whoever triggered the reset may have been locked out by an
-          // attacker holding a live session. Killing the stored refresh
-          // token logs every device out.
+
           refreshToken: null,
         },
       }),
@@ -250,11 +244,12 @@ export class AuthService {
     return { message: 'Your password has been reset. Please sign in again.' };
   }
 
+  // Hashes a token before it is compared with or written to the database.
   private hashToken(token: string): string {
     return crypto.createHash('sha256').update(token).digest('hex');
   }
 
-  //login
+  // Verifies credentials and issues a token pair.
   async login(loginDto: LoginDto): Promise<AuthResponseDto> {
     const { email, password } = loginDto;
 
@@ -263,7 +258,16 @@ export class AuthService {
         email,
       },
     });
-    if (!user || !(await bcrypt.compare(password, user.password))) {
+    // Short-circuiting on `!user` used to skip bcrypt entirely, so an unknown
+    // address answered in milliseconds while a real one cost a ~300ms hash —
+    // the identical 401 body was still readable on the clock. Spend the same
+    // work either way.
+    if (!user) {
+      await bcrypt.compare(password, DUMMY_PASSWORD_HASH);
+      throw new UnauthorizedException('Invalid email or password');
+    }
+
+    if (!(await bcrypt.compare(password, user.password))) {
       throw new UnauthorizedException('Invalid email or password');
     }
 

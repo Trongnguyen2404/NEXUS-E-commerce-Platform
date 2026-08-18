@@ -6,10 +6,10 @@ import {
   IsNumber,
   IsOptional,
   IsString,
+  Max,
   Min,
 } from 'class-validator';
 
-/** Sort keys the client may ask for. Anything else is rejected by IsIn. */
 export const PRODUCT_SORTS = [
   'newest',
   'oldest',
@@ -22,13 +22,22 @@ export const PRODUCT_SORTS = [
 
 export type ProductSort = (typeof PRODUCT_SORTS)[number];
 
-/** Query params sent as strings; "false" is truthy, so convert explicitly. */
-const toBoolean = ({ value }: { value: unknown }) => {
-  if (value === 'true' || value === true) return true;
-  if (value === 'false' || value === false) return false;
+// Reads the raw query value so implicit conversion cannot mangle it first.
+const toBoolean = ({
+  obj,
+  key,
+}: {
+  obj: Record<string, unknown>;
+  key: string;
+}) => {
+  const raw = obj?.[key];
+
+  if (raw === 'true' || raw === true) return true;
+  if (raw === 'false' || raw === false) return false;
   return undefined;
 };
 
+// Query string accepted when listing products.
 export class QueryProductDto {
   @ApiPropertyOptional({
     description: 'Filter by category id, name or slug',
@@ -51,6 +60,11 @@ export class QueryProductDto {
     description: 'Search by product name',
     example: 'headphones',
   })
+  @Transform(({ value }: { value: unknown }) =>
+    typeof value === 'string'
+      ? value.trim().replace(/\s+/g, ' ') || undefined
+      : value,
+  )
   @IsString()
   @IsOptional()
   search?: string;
@@ -118,6 +132,8 @@ export class QueryProductDto {
   @Type(() => Number)
   @IsNumber()
   @Min(1)
+  // Caps how much one request can pull; ?limit=99999 was accepted before.
+  @Max(100)
   @IsOptional()
   limit: number = 10;
 }

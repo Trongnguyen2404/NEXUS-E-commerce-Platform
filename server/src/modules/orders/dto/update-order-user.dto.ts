@@ -1,8 +1,7 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { IsOptional, IsString } from 'class-validator';
 
-// What the order's owner is allowed to change. `status` is deliberately absent:
-// only an ADMIN (or the payment flow) may move an order along its lifecycle.
+// Body a customer may send when changing their own order.
 export class UpdateOrderUserDto {
   @ApiPropertyOptional({
     description: 'Shipping address (only while the order is still PENDING)',

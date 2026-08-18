@@ -49,6 +49,7 @@ import {
 import { QuoteOrderDto } from '@/modules/orders/dto/quote-order.dto';
 import { PricingService } from '@/modules/pricing/pricing.service';
 
+// Order endpoints for customers plus admin-only management.
 @ApiTags('orders')
 @ApiBearerAuth('JWT-auth')
 @Controller('orders')
@@ -59,7 +60,7 @@ export class OrdersController {
     private readonly pricingService: PricingService,
   ) {}
 
-  // Create orders
+  // Places an order from the caller's basket.
   @Post()
   @ModerateThrottle()
   @ApiOperation({
@@ -88,7 +89,7 @@ export class OrdersController {
     return await this.ordersService.create(userId, createOrderDto);
   }
 
-  // Price preview
+  // Prices a basket without creating anything.
   @Post('quote')
   @HttpCode(HttpStatus.OK)
   @ModerateThrottle()
@@ -109,7 +110,7 @@ export class OrdersController {
     );
   }
 
-  // Get all orders
+  // Lists every order with filters; admin only.
   @Get('admin/all')
   @Roles(Role.ADMIN)
   @RelaxedThrottle()
@@ -153,7 +154,7 @@ export class OrdersController {
     return await this.ordersService.findAllForAdmin(query);
   }
 
-  // User Get own orders
+  // Lists the caller's own orders.
   @Get()
   @RelaxedThrottle()
   @ApiOperation({
@@ -170,7 +171,7 @@ export class OrdersController {
     return await this.ordersService.findAll(userId, query);
   }
 
-  // ADMIN: Get order by ID
+  // Returns any order by id; admin only.
   @Get('admin/:id')
   @Roles(Role.ADMIN)
   @RelaxedThrottle()
@@ -195,7 +196,7 @@ export class OrdersController {
     return await this.ordersService.findOne(id);
   }
 
-  //User: Get own order by id
+  // Returns one of the caller's own orders.
   @Get(':id')
   @RelaxedThrottle()
   @ApiOperation({
@@ -213,7 +214,7 @@ export class OrdersController {
     return await this.ordersService.findOne(id, userId);
   }
 
-  // ADMIN update order
+  // Changes an order's status; admin only.
   @Patch('admin/:id')
   @Roles(Role.ADMIN)
   @ModerateThrottle()
@@ -241,7 +242,7 @@ export class OrdersController {
     return await this.ordersService.update(id, dto);
   }
 
-  // User: update own order (shipping address only — status is ADMIN-only)
+  // Lets the customer edit their own pending order.
   @Patch(':id')
   @ModerateThrottle()
   @ApiOperation({
@@ -273,7 +274,7 @@ export class OrdersController {
     return await this.ordersService.updateOwn(id, userId, dto);
   }
 
-  //Admin : Cancel an order
+  // Deletes an order; admin only.
   @Delete('admin/:id')
   @Roles(Role.ADMIN)
   @ModerateThrottle()
@@ -295,8 +296,7 @@ export class OrdersController {
     return await this.ordersService.cancel(id);
   }
 
-  // User cancel own order
-
+  // Cancels one of the caller's own orders.
   @Delete(':id')
   @ModerateThrottle()
   @ApiOperation({

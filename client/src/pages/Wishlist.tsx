@@ -5,8 +5,11 @@ import { useWishlistStore } from '../store/useWishlistStore';
 import WishlistButton from '../components/WishlistButton';
 import StarRating from '../components/StarRating';
 import { PRODUCT_PLACEHOLDER } from '../components/productPlaceholder';
+import useDocumentMeta from '../hooks/useDocumentMeta';
 
+// Lists the products the user has saved.
 const Wishlist = () => {
+  useDocumentMeta({ title: 'Saved items', noIndex: true });
   const navigate = useNavigate();
   const { products, isLoading, fetchWishlist } = useWishlistStore();
 

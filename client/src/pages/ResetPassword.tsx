@@ -4,6 +4,7 @@ import { ArrowLeft, Loader2, ShieldAlert } from 'lucide-react';
 import { toast } from 'react-toastify';
 import axiosClient, { getErrorMessage } from '../api/axiosClient';
 
+// Sets a new password from an emailed reset token.
 const ResetPassword = () => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -16,8 +17,6 @@ const ResetPassword = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // Checked here as well as on the server: catching it before the round trip
-    // avoids burning the single-use token on a typo.
     if (password !== confirmPassword) {
       toast.error('The two passwords do not match.');
       return;
@@ -39,13 +38,12 @@ const ResetPassword = () => {
     }
   };
 
-  // Someone opened /reset-password directly instead of following the emailed link.
   if (!token) {
     return (
       <div className="min-h-[70vh] flex items-center justify-center px-4 sm:px-6 lg:px-8">
         <div className="max-w-md w-full text-center">
-          <div className="inline-flex items-center justify-center h-16 w-16 rounded-2xl bg-amber-50 mb-8">
-            <ShieldAlert className="text-amber-500" size={28} strokeWidth={2} />
+          <div className="inline-flex items-center justify-center h-16 w-16 rounded-2xl bg-state-warning-soft mb-8">
+            <ShieldAlert className="text-state-warning" size={28} strokeWidth={2} />
           </div>
 
           <h1 className="text-3xl font-black uppercase tracking-tight mb-4">Link is incomplete</h1>

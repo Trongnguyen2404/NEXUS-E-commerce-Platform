@@ -6,9 +6,10 @@ import {
 import { Coupon, DiscountType, Prisma, ProductVariant } from '@prisma/client';
 import { PrismaService } from '@/prisma/prisma.service';
 
-/** Money is rounded to cents at every step so totals never drift by a fraction. */
+// Rounds to whole cents.
 const money = (value: number): number => Math.round(value * 100) / 100;
 
+// Reads a numeric setting from the environment with a fallback.
 const numberFromEnv = (key: string, fallback: number): number => {
   const parsed = Number(process.env[key]);
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
@@ -17,9 +18,9 @@ const numberFromEnv = (key: string, fallback: number): number => {
 export interface QuoteLine {
   productId: string;
   productName: string;
-  /** Null when the product does not sell in variants. */
+
   variantId: string | null;
-  /** Snapshot of the variant label, e.g. "M / Black". */
+
   variantLabel: string | null;
   unitPrice: number;
   quantity: number;
@@ -47,21 +48,14 @@ export interface Quote {
   coupon: AppliedCoupon | null;
   shippingFee: number;
   freeShippingThreshold: number;
-  /** How much more the basket needs for free shipping; 0 once it qualifies. */
+
   amountToFreeShipping: number;
   taxRate: number;
   taxAmount: number;
   total: number;
 }
 
-/**
- * Single source of truth for what an order costs.
- *
- * Both the checkout preview and the real order creation go through here, so the
- * number the customer is shown is produced by the same code that charges them.
- * Nothing about the price is ever accepted from the client — only product ids
- * and quantities are.
- */
+// Single source of truth for basket pricing: discounts, shipping and tax.
 @Injectable()
 export class PricingService {
   constructor(private prisma: PrismaService) {}
@@ -70,15 +64,12 @@ export class PricingService {
     return {
       shippingFlatFee: numberFromEnv('SHIPPING_FLAT_FEE', 9.99),
       freeShippingThreshold: numberFromEnv('FREE_SHIPPING_THRESHOLD', 100),
-      // 0.08 = 8%.
+
       taxRate: numberFromEnv('TAX_RATE', 0.08),
     };
   }
 
-  /**
-   * Prices a basket. `tx` lets order creation reuse this inside its transaction
-   * so the coupon's remaining uses are read under the same lock that spends it.
-   */
+  // Prices a basket, validating stock and resolving variant prices.
   async quote(
     items: BasketItem[],
     couponCode?: string,
@@ -112,8 +103,6 @@ export class PricingService {
         throw new BadRequestException(`${product.name} is no longer available`);
       }
 
-      // Variant products carry their price and stock on the variant; plain
-      // products keep using their own columns.
       let variant: ProductVariant | null = null;
 
       if (product.hasVariants) {
@@ -138,8 +127,6 @@ export class PricingService {
           );
         }
       } else if (item.variantId) {
-        // Refusing rather than ignoring: silently dropping it would price a
-        // different thing than the customer picked.
         throw new BadRequestException(
           `${product.name} does not have options to choose from`,
         );
@@ -156,8 +143,6 @@ export class PricingService {
         );
       }
 
-      // Price comes from the database, never from the request body. A variant
-      // with no price of its own inherits the product's.
       const unitPrice = Number(variant?.price ?? product.price);
       const lineTotal = money(unitPrice * item.quantity);
 
@@ -180,13 +165,9 @@ export class PricingService {
     const discountAmount = coupon?.discountAmount ?? 0;
     const discountedSubtotal = money(subtotal - discountAmount);
 
-    // Free over the threshold, flat fee below it. Measured against the amount
-    // actually paid for goods, so a coupon can drop a basket back into paying
-    // for shipping — which is the honest reading of "spend $100 to get it free".
     const shippingFee =
       discountedSubtotal >= freeShippingThreshold ? 0 : money(shippingFlatFee);
 
-    // Tax applies to the discounted goods only, not to the shipping line.
     const taxAmount = money(discountedSubtotal * taxRate);
 
     return {
@@ -206,7 +187,7 @@ export class PricingService {
     };
   }
 
-  /** Validates a code against the basket and works out what it takes off. */
+  // Validates a promo code and applies its discount.
   private async applyCoupon(
     code: string,
     subtotal: number,
@@ -216,8 +197,6 @@ export class PricingService {
       where: { code: code.trim().toUpperCase() },
     });
 
-    // One message for "no such code" and "expired": a different answer per case
-    // turns the endpoint into a way to enumerate valid codes.
     const invalid = new BadRequestException('This promo code is not valid');
 
     if (!coupon || !coupon.isActive) throw invalid;
@@ -245,6 +224,7 @@ export class PricingService {
     };
   }
 
+  // Works out the discount a coupon is worth on this subtotal.
   private discountFor(coupon: Coupon, subtotal: number): number {
     const value = Number(coupon.value);
 
@@ -253,12 +233,10 @@ export class PricingService {
         ? money(subtotal * (value / 100))
         : money(value);
 
-    // A percentage code can be capped, so "50% off" cannot take $900 off a laptop.
     if (coupon.maxDiscount) {
       discount = Math.min(discount, Number(coupon.maxDiscount));
     }
 
-    // Never refund the customer money by discounting past the basket value.
     return money(Math.min(discount, subtotal));
   }
 }

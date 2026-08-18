@@ -2,9 +2,10 @@ import { create } from 'zustand';
 import axiosClient from '../api/axiosClient';
 import type { Product, WishlistToggleResponse } from '../types/api';
 
+// Wishlist store shape: the saved ids and the actions on them.
 interface WishlistState {
   products: Product[];
-  /** Product ids, for O(1) lookups from heart buttons in a grid. */
+
   savedIds: Set<string>;
   isLoading: boolean;
   fetchWishlist: () => Promise<void>;
@@ -18,7 +19,6 @@ export const useWishlistStore = create<WishlistState>((set, get) => ({
   isLoading: false,
 
   fetchWishlist: async () => {
-    // Anonymous visitors would just get a 401 and a red toast.
     if (!localStorage.getItem('accessToken')) return;
 
     set({ isLoading: true });
@@ -35,12 +35,6 @@ export const useWishlistStore = create<WishlistState>((set, get) => ({
     }
   },
 
-  /**
-   * Flips one product and returns its new state.
-   *
-   * Updates the local set from the server's answer rather than assuming — the
-   * endpoint is idempotent, so a double click cannot desync the heart.
-   */
   toggle: async (productId) => {
     const res = await axiosClient.post<WishlistToggleResponse>(
       `/wishlist/${productId}/toggle`,
@@ -55,8 +49,7 @@ export const useWishlistStore = create<WishlistState>((set, get) => ({
 
     set({
       savedIds,
-      // Drop it from the visible list immediately so the wishlist page does not
-      // keep showing a card the user just un-hearted.
+
       products: res.inWishlist
         ? get().products
         : get().products.filter((product) => product.id !== productId),

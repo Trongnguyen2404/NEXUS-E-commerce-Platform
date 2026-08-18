@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, ShieldCheck, Loader2, CreditCard, Tag } from 'lucide-react';
+import { ArrowLeft, ShieldCheck, Loader2, CreditCard, Tag, Check, AlertTriangle } from 'lucide-react';
 import { toast } from 'react-toastify';
 import axiosClient, { getErrorMessage } from '../api/axiosClient';
 import { useCartStore } from '../store/useCartStore';
@@ -8,17 +8,43 @@ import AddressBook from '../components/AddressBook';
 import { PRODUCT_PLACEHOLDER } from '../components/productPlaceholder';
 import type { Address, ApiEnvelope, Order, Quote } from '../types/api';
 
-// Stripe Imports
+
 import { loadStripe } from '@stripe/stripe-js';
 import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-stripe-js';
 
-// ==========================================
-// ⚠️ Replace with your actual Stripe Public Key
-// ==========================================
+
+
+
 const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLIC_KEY);
-// ------------------------------------------------------------------
-// COMPONENT 1: The Stripe Payment Form (Rendered in Step 2)
-// ------------------------------------------------------------------
+
+
+
+// Money only ever compares as whole cents; 202.04 against 202.04000000000002 is
+// the same charge and must not read as a price change.
+const cents = (value: number | string) => Math.round(Number(value) * 100);
+
+// The server re-prices the basket inside the order transaction, so the created
+// order — not the quote that preceded it — is what Stripe will charge. Re-point
+// the summary at those figures instead of leaving the stale quote on screen.
+const quoteFromOrder = (previous: Quote, order: Order): Quote => {
+  const discountAmount = cents(order.discountAmount) / 100;
+  const shippingFee = cents(order.shippingFee) / 100;
+  const shortfallCents = cents(previous.freeShippingThreshold) - cents(order.subtotal);
+
+  return {
+    ...previous,
+    subtotal: cents(order.subtotal) / 100,
+    discountAmount,
+    shippingFee,
+    taxAmount: cents(order.taxAmount) / 100,
+    total: cents(order.total) / 100,
+    amountToFreeShipping: shippingFee === 0 || shortfallCents <= 0 ? 0 : shortfallCents / 100,
+    coupon: previous.coupon ? { ...previous.coupon, discountAmount } : null,
+  };
+};
+
+
+// Stripe payment step, shown once the order exists.
 const PaymentForm = ({ orderId }: { orderId: string }) => {
   const stripe = useStripe();
   const elements = useElements();
@@ -33,10 +59,10 @@ const PaymentForm = ({ orderId }: { orderId: string }) => {
     setIsProcessing(true);
 
     try {
-      // 1. Confirm payment with Stripe directly
+      
       const { error, paymentIntent } = await stripe.confirmPayment({
         elements,
-        redirect: 'if_required', // Prevents automatic redirect so we can handle our backend
+        redirect: 'if_required', 
       });
 
       if (error) {
@@ -45,7 +71,7 @@ const PaymentForm = ({ orderId }: { orderId: string }) => {
         return;
       }
 
-      // 2. If Stripe says it succeeded, tell our Backend to confirm it
+      
       if (paymentIntent && paymentIntent.status === 'succeeded') {
         await axiosClient.post('/payments/confirm', {
           paymentIntentId: paymentIntent.id,
@@ -67,7 +93,6 @@ const PaymentForm = ({ orderId }: { orderId: string }) => {
   return (
     <form onSubmit={handlePaymentSubmit} className="space-y-6 mt-6">
       <div className="bg-[#F5F5F7] p-4 rounded-xl">
-        {/* Stripe's secure pre-built UI element */}
         <PaymentElement />
       </div>
       <button
@@ -82,9 +107,10 @@ const PaymentForm = ({ orderId }: { orderId: string }) => {
 };
 
 
-// ------------------------------------------------------------------
-// COMPONENT 2: Main Checkout Page
-// ------------------------------------------------------------------
+
+
+
+// Two-step checkout: pick an address, then pay.
 const Checkout = () => {
   const navigate = useNavigate();
   const { cart, fetchCart } = useCartStore();
@@ -92,38 +118,57 @@ const Checkout = () => {
   const [selectedAddress, setSelectedAddress] = useState<Address | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Promo code: what is typed, and what the server has actually accepted.
+  
   const [codeInput, setCodeInput] = useState('');
   const [appliedCode, setAppliedCode] = useState<string | null>(null);
   const [isApplying, setIsApplying] = useState(false);
 
-  // Every figure shown comes from the server. Nothing is added up in the browser.
+  
   const [quote, setQuote] = useState<Quote | null>(null);
 
-  // State for Step 2 (Payment)
+  
   const [clientSecret, setClientSecret] = useState<string | null>(null);
   const [currentOrderId, setCurrentOrderId] = useState<string | null>(null);
 
-  // ProtectedRoute đã chặn người chưa đăng nhập, ở đây chỉ lo giỏ hàng rỗng.
+  // POST /orders is not idempotent — it decrements stock and burns a coupon use.
+  // The id has to survive inside the same async handler that created it, so it
+  // lives in a ref as well as in state; a retry after a failed create-intent
+  // reuses this order rather than placing a second one.
+  const createdOrderIdRef = useRef<string | null>(null);
+
+  // Set when the order came back priced differently from the quote the buyer saw.
+  const [repricedTotal, setRepricedTotal] = useState<number | null>(null);
+
+
   useEffect(() => {
+    // Placing the order marks the cart checked out, so from that moment it is
+    // *supposed* to be empty. Without this the guard below fired on the next
+    // refresh and threw the buyer back to /cart mid-payment, before the Stripe
+    // form had rendered — an order created and paid for on a page they never
+    // got to see.
+    if (currentOrderId) return;
+
     if (!cart || cart.cartItems.length === 0) {
       fetchCart().then(() => {
         if (!useCartStore.getState().cart?.cartItems?.length) navigate('/cart');
       });
     }
-  }, [cart, navigate, fetchCart]);
+  }, [cart, navigate, fetchCart, currentOrderId]);
 
   const basketItems = useMemo(
     () =>
       cart?.cartItems.map((item) => ({
-        productId: item.product.id,
+        productId: item.productId,
         quantity: item.quantity,
+        // Carry the chosen option through. Without it the server cannot price
+        // a variant product and rejects the basket with "choose an option",
+        // which the page rendered as a $0.00 total.
+        ...(item.variantId ? { variantId: item.variantId } : {}),
       })) ?? [],
     [cart],
   );
 
-  /** Re-prices the basket server-side. `code` is passed explicitly so applying
-   *  and clearing a promo code can both quote before state has settled. */
+  
   const refreshQuote = useCallback(
     async (code: string | null) => {
       if (basketItems.length === 0) return null;
@@ -156,7 +201,7 @@ const Checkout = () => {
       setCodeInput('');
       toast.success(`Code ${code.toUpperCase()} applied.`);
     } catch (error) {
-      // The quote failed, so the previous total still stands — put it back.
+      
       await refreshQuote(appliedCode).catch(() => {});
       toast.error(getErrorMessage(error, 'This promo code is not valid'));
     } finally {
@@ -169,40 +214,54 @@ const Checkout = () => {
     await refreshQuote(null).catch(() => {});
   };
 
-  // Step 1: Submit Address -> Create Order -> Create Payment Intent
+  
   const handleProceedToPayment = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!selectedAddress) {
+    if (!createdOrderIdRef.current && !selectedAddress) {
       toast.error('Choose a shipping address first.');
       return;
     }
-    if (!cart) return;
+    if (!cart && !createdOrderIdRef.current) return;
 
     setIsSubmitting(true);
     try {
-      // The order is priced again server-side; the quote above was only a preview.
-      const orderResponse = await axiosClient.post<ApiEnvelope<Order>>('/orders', {
-        items: basketItems,
-        addressId: selectedAddress.id,
-        ...(appliedCode ? { couponCode: appliedCode } : {}),
-      });
-      const createdOrder = orderResponse.data;
+      let orderId = createdOrderIdRef.current;
 
-      if (!createdOrder?.id) throw new Error('Order creation failed to return an ID');
+      if (!orderId) {
+        const orderResponse = await axiosClient.post<ApiEnvelope<Order>>('/orders', {
+          items: basketItems,
+          addressId: selectedAddress!.id,
+          ...(appliedCode ? { couponCode: appliedCode } : {}),
+        });
+        const createdOrder = orderResponse.data;
 
-      // Prices can move between quoting and committing.
-      if (quote && Number(createdOrder.total) !== Number(quote.total)) {
-        toast.info('Some prices changed while you were checking out — the total has been updated.');
+        if (!createdOrder?.id) throw new Error('Order creation failed to return an ID');
+
+        // Remember the order before anything else can fail. If create-intent
+        // below throws, the next click must resume this order instead of
+        // placing a second one against the same basket.
+        orderId = createdOrder.id;
+        createdOrderIdRef.current = orderId;
+        setCurrentOrderId(orderId);
+
+        // The order is priced server-side and Stripe charges that figure, so a
+        // mismatch means the buyer is looking at a number they will not pay.
+        // Show the real one and make them accept it before the card form opens.
+        if (quote && cents(createdOrder.total) !== cents(quote.total)) {
+          setQuote(quoteFromOrder(quote, createdOrder));
+          setRepricedTotal(cents(createdOrder.total) / 100);
+          toast.info('Some prices changed while you were checking out — check the new total.');
+          return;
+        }
       }
 
       const paymentResponse = await axiosClient.post<
         ApiEnvelope<{ clientSecret: string; paymentId: string }>
       >('/payments/create-intent', {
-        orderId: createdOrder.id,
+        orderId,
       });
 
-      setCurrentOrderId(createdOrder.id);
       setClientSecret(paymentResponse.data.clientSecret);
 
     } catch (error) {
@@ -218,46 +277,113 @@ const Checkout = () => {
     <div className="min-h-screen bg-white pb-24">
       <div className="max-w-[1200px] mx-auto px-4 sm:px-6 lg:px-8 pt-10">
 
-        <button onClick={() => navigate('/cart')} className="flex items-center space-x-2 text-gray-400 hover:text-black transition-colors mb-10">
+        <button onClick={() => navigate('/cart')} className="flex items-center space-x-2 text-gray-400 hover:text-black transition-colors mb-8">
           <ArrowLeft size={16} />
           <span className="text-xs font-semibold uppercase tracking-widest">Back to Cart</span>
         </button>
 
+        {/* Two steps, so say which one they are on. */}
+        <ol className="flex items-center gap-3 sm:gap-5 mb-10" aria-label="Checkout progress">
+          {[
+            { n: 1, label: 'Shipping', done: Boolean(clientSecret) },
+            { n: 2, label: 'Payment', done: false },
+          ].map((step) => {
+            const active = clientSecret ? step.n === 2 : step.n === 1;
+            return (
+              <li key={step.n} className="flex items-center gap-3 sm:gap-5">
+                <div className="flex items-center gap-2.5">
+                  <span
+                    className={`h-7 w-7 rounded-full flex items-center justify-center text-[11px] font-black transition-colors ${
+                      step.done
+                        ? 'bg-state-success text-white'
+                        : active
+                          ? 'bg-black text-white'
+                          : 'bg-surface-muted text-gray-400'
+                    }`}
+                    aria-current={active ? 'step' : undefined}
+                  >
+                    {step.done ? <Check size={14} strokeWidth={3} /> : step.n}
+                  </span>
+                  <span
+                    className={`text-[11px] font-black uppercase tracking-widest ${
+                      active || step.done ? 'text-black' : 'text-gray-400'
+                    }`}
+                  >
+                    {step.label}
+                  </span>
+                </div>
+                {step.n === 1 && <span className="h-px w-8 sm:w-16 bg-gray-200" aria-hidden />}
+              </li>
+            );
+          })}
+        </ol>
+
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-start">
 
-          {/* LEFT COLUMN: Forms */}
           <div className="lg:col-span-7 space-y-8">
 
-            {/* STEP 1: Shipping Address */}
             {!clientSecret ? (
               <div className="bg-surface-muted rounded-3xl p-6 sm:p-10 border border-gray-100">
                 <h2 className="text-2xl font-black uppercase tracking-tight mb-2">Shipping Details</h2>
                 <p className="text-xs font-medium text-gray-500 mb-8">
-                  Pick where this order should go. Your default address is selected for you.
+                  {currentOrderId
+                    ? 'Your order is reserved and shipping to the address below.'
+                    : 'Pick where this order should go. Your default address is selected for you.'}
                 </p>
 
-                <AddressBook
-                  selectedId={selectedAddress?.id ?? null}
-                  onSelect={setSelectedAddress}
-                />
+                {currentOrderId ? (
+                  // The order already carries this address, so offering to change
+                  // it here would be a control that silently does nothing.
+                  <div className="bg-white rounded-2xl px-5 py-4 border border-gray-200">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">
+                      Shipping to
+                    </p>
+                    <p className="text-sm font-bold mt-1">{selectedAddress?.formatted}</p>
+                  </div>
+                ) : (
+                  <AddressBook
+                    selectedId={selectedAddress?.id ?? null}
+                    onSelect={setSelectedAddress}
+                  />
+                )}
+
+                {repricedTotal !== null && (
+                  <div
+                    role="alert"
+                    className="mt-6 flex items-start gap-3 bg-brand-soft text-brand-ink rounded-2xl px-4 py-3.5"
+                  >
+                    <AlertTriangle size={16} className="shrink-0 mt-0.5" />
+                    <p className="text-xs font-medium">
+                      Prices changed while you were checking out. Your total is now $
+                      {repricedTotal.toFixed(2)} — the summary has been updated. Confirm to pay
+                      that amount.
+                    </p>
+                  </div>
+                )}
 
                 <button
                   type="button"
                   onClick={handleProceedToPayment}
-                  disabled={isSubmitting || !selectedAddress}
+                  disabled={isSubmitting || (!selectedAddress && !currentOrderId)}
                   className="mt-8 w-full bg-black text-white py-5 rounded-2xl font-black uppercase tracking-widest text-sm hover:bg-gray-800 transition-all shadow-lg shadow-black/10 flex items-center justify-center space-x-3 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {isSubmitting ? <Loader2 className="animate-spin" /> : <span>Continue to Payment</span>}
+                  {isSubmitting ? (
+                    <Loader2 className="animate-spin" />
+                  ) : (
+                    <span>
+                      {repricedTotal !== null ? 'Confirm New Total' : 'Continue to Payment'}
+                    </span>
+                  )}
                 </button>
 
-                {!selectedAddress && (
+                {!selectedAddress && !currentOrderId && (
                   <p className="mt-3 text-center text-xs font-medium text-gray-400">
                     Add or choose an address to continue.
                   </p>
                 )}
               </div>
             ) : (
-              /* STEP 2: Secure Payment Form */
+              
               <div className="bg-white rounded-3xl p-10 border border-gray-200 shadow-xl shadow-gray-200/50">
                 <div className="flex items-center space-x-3 mb-6 border-b border-gray-100 pb-6">
                   <CreditCard className="text-brand-ink" size={28} />
@@ -267,7 +393,6 @@ const Checkout = () => {
                   </div>
                 </div>
 
-                {/* Wrap the form in Stripe's Elements provider */}
                 <Elements stripe={stripePromise} options={{ clientSecret, appearance: { theme: 'stripe' } }}>
                   <PaymentForm orderId={currentOrderId!} />
                 </Elements>
@@ -276,7 +401,6 @@ const Checkout = () => {
 
           </div>
 
-          {/* RIGHT COLUMN: Order Summary */}
           <div className="lg:col-span-5">
             <div className="bg-[#F5F5F7] rounded-3xl p-8 border border-gray-100 sticky top-24">
               <h2 className="text-xl font-black uppercase tracking-tight mb-6">In Your Bag</h2>
@@ -306,8 +430,6 @@ const Checkout = () => {
                 ))}
               </div>
 
-              {/* Promo code. The server decides whether it is valid and what it
-                  is worth; this box only relays the answer. */}
               <div className="border-t border-gray-200 pt-6 mb-6">
                 {appliedCode && quote?.coupon ? (
                   <div className="flex items-center justify-between bg-state-success-soft rounded-2xl px-4 py-3">
@@ -346,7 +468,6 @@ const Checkout = () => {
                 )}
               </div>
 
-              {/* Every line below is the server's number, not a browser sum. */}
               <div className="space-y-3 border-t border-gray-200 pt-6 mb-6">
                 <div className="flex justify-between text-sm font-bold text-gray-500">
                   <span>Subtotal</span>

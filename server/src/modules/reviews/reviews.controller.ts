@@ -33,12 +33,13 @@ import {
   RelaxedThrottle,
 } from '@/common/decorators/custom-throttler.decorator';
 
+// Product review endpoints.
 @ApiTags('reviews')
 @Controller()
 export class ReviewsController {
   constructor(private readonly reviewsService: ReviewsService) {}
 
-  // Public: anyone browsing a product page sees its reviews.
+  // Lists a product's reviews with its rating summary.
   @Get('products/:productId/reviews')
   @RelaxedThrottle()
   @ApiOperation({
@@ -55,6 +56,7 @@ export class ReviewsController {
     return await this.reviewsService.findByProduct(productId, query);
   }
 
+  // Posts or replaces the caller's review of a product.
   @Post('products/:productId/reviews')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('JWT-auth')
@@ -75,6 +77,7 @@ export class ReviewsController {
     return await this.reviewsService.upsert(userId, productId, dto);
   }
 
+  // Returns the caller's own review of a product, if any.
   @Get('products/:productId/reviews/mine')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('JWT-auth')
@@ -92,6 +95,7 @@ export class ReviewsController {
     return await this.reviewsService.findMine(userId, productId);
   }
 
+  // Deletes a review; the author or an admin.
   @Delete('reviews/:id')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('JWT-auth')

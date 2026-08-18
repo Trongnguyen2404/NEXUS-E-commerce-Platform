@@ -1,16 +1,13 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Loader2, Trash2, Package } from 'lucide-react';
 import { toast } from 'react-toastify';
 import axiosClient, { getErrorMessage } from '../api/axiosClient';
 import Select from '../components/Select';
 import type { SelectOption } from '../components/Select';
+import Pagination from '../components/Pagination';
 import type { Order, OrderStatus, PageResponse } from '../types/api';
 
-/**
- * Tinted rather than saturated fills. White-on-#007AFF pills shouted louder
- * than anything else on the page; a soft background with dark text carries the
- * same meaning and every pair here measures above 4.5:1.
- */
+
 const STATUS_STYLES: Record<OrderStatus, string> = {
   PENDING: 'bg-state-warning-soft text-state-warning',
   PROCESSING: 'bg-state-info-soft text-state-info',
@@ -19,13 +16,7 @@ const STATUS_STYLES: Record<OrderStatus, string> = {
   CANCELLED: 'bg-state-danger-soft text-state-danger',
 };
 
-/**
- * The same five colours, carried into the menu as a dot.
- *
- * Tinting each row's background instead would fight the highlight on whichever
- * row the keyboard or pointer is on, and five pastel stripes in a column is
- * harder to read than one solid list.
- */
+
 const STATUS_OPTIONS: SelectOption<OrderStatus>[] = [
   { value: 'PENDING', label: 'Pending', dotClassName: 'bg-state-warning' },
   { value: 'PROCESSING', label: 'Processing', dotClassName: 'bg-state-info' },
@@ -34,24 +25,32 @@ const STATUS_OPTIONS: SelectOption<OrderStatus>[] = [
   { value: 'CANCELLED', label: 'Cancelled', dotClassName: 'bg-state-danger' },
 ];
 
+const PAGE_SIZE = 10;
+
+// Admin screen for reviewing orders and changing their status.
 const AdminOrders = () => {
   const [orders, setOrders] = useState<Order[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
 
-  const fetchOrders = async () => {
+  const fetchOrders = useCallback(async () => {
     try {
-      const res = await axiosClient.get<PageResponse<Order>>('/orders/admin/all');
+      const res = await axiosClient.get<PageResponse<Order>>('/orders/admin/all', {
+        params: { page, limit: PAGE_SIZE },
+      });
       setOrders(Array.isArray(res?.data) ? res.data : []);
+      setTotal(res?.total ?? 0);
     } catch {
       toast.error('Failed to load orders');
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [page]);
 
-  useEffect(() => { fetchOrders(); }, []);
+  useEffect(() => { fetchOrders(); }, [fetchOrders]);
 
-  // Đổi trạng thái đơn hàng (PENDING -> PROCESSING -> SHIPPED -> DELIVERED)
+  
   const handleStatusChange = async (id: string, newStatus: OrderStatus) => {
     try {
       await axiosClient.patch(`/orders/admin/${id}`, { status: newStatus });
@@ -62,7 +61,7 @@ const AdminOrders = () => {
     }
   };
 
-  // Admin xóa/hủy đơn
+  
   const handleDelete = async (id: string) => {
     if (!window.confirm('Delete this order?')) return;
     try {
@@ -85,8 +84,9 @@ const AdminOrders = () => {
             <h1 className="text-4xl sm:text-5xl font-black uppercase tracking-tighter text-black">Orders</h1>
             <p className="text-gray-500 text-[10px] font-black uppercase tracking-[0.4em] mt-2">Manage All Shipments</p>
           </div>
+          {/* The whole count, not just this page's rows. */}
           <div className="bg-black text-white px-6 py-3 rounded-xl font-black uppercase text-xs tracking-widest">
-            {orders.length} Total
+            {total} Total
           </div>
         </div>
 
@@ -120,7 +120,6 @@ const AdminOrders = () => {
                   </td>
                   <td className="py-5 px-4 font-black text-sm text-black">${Number(o.total).toFixed(2)}</td>
                   
-                  {/* Cột chọn trạng thái Đơn hàng */}
                   <td className="py-5 px-4 text-center">
                     <Select
                       value={o.status}
@@ -140,6 +139,14 @@ const AdminOrders = () => {
               ))}
             </tbody>
           </table>
+
+          <Pagination
+            page={page}
+            totalPages={Math.ceil(total / PAGE_SIZE)}
+            total={total}
+            onChange={setPage}
+            label="orders"
+          />
         </div>
       </div>
     </div>

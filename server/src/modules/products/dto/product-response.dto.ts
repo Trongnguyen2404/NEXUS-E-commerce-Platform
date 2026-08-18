@@ -1,6 +1,7 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { VariantResponseDto } from '@/modules/products/dto/variant.dto';
 
+// Product as returned by the API.
 export class ProductResponseDto {
   @ApiProperty({
     description: 'Product ID',
@@ -44,6 +45,18 @@ export class ProductResponseDto {
     example: 'https://example.com/image.jpg',
   })
   imageUrl: string | null;
+
+  @ApiProperty({
+    description:
+      'Every image, in display order. The first is the cover and matches imageUrl. ' +
+      'Listings return at most the cover; the detail endpoint returns the full gallery.',
+    type: [String],
+    example: [
+      'https://example.com/front.webp',
+      'https://example.com/back.webp',
+    ],
+  })
+  images: string[];
 
   @ApiProperty({
     description: 'Product category',

@@ -29,6 +29,7 @@ import { MailService } from '@/modules/mail/mail.service';
 import { orderStatusEmail } from '@/modules/mail/mail.templates';
 import { frontendUrl } from '@/modules/auth/auth.constants';
 
+// Order lifecycle: placing, listing, status changes, cancellation and stock.
 @Injectable()
 export class OrdersService {
   private readonly logger = new Logger(OrdersService.name);
@@ -39,7 +40,7 @@ export class OrdersService {
     private pricingService: PricingService,
   ) {}
 
-  /** Flattens a saved address into the one-line snapshot stored on the order. */
+  // Flattens an address into the single line stored on the order.
   private formatAddress(address: Address): string {
     return [
       address.fullName,
@@ -55,7 +56,7 @@ export class OrdersService {
       .join(', ');
   }
 
-  // Create
+  // Places an order: prices the basket, reserves stock and marks the cart checked out.
   async create(
     userId: string,
     createOrderDto: CreateOrderDto,
@@ -72,8 +73,6 @@ export class OrdersService {
       },
     });
 
-    // A saved address wins over the free-text field, but is flattened into a
-    // snapshot so editing the address book never rewrites past orders.
     let addressSnapshot = shippingAddress ?? null;
     if (addressId) {
       const address = await this.prisma.address.findFirst({
@@ -88,14 +87,9 @@ export class OrdersService {
     }
 
     const order = await this.prisma.$transaction(async (tx) => {
-      // Priced INSIDE the transaction: stock and coupon usage are checked
-      // against the same snapshot that the writes below act on.
       const quote = await this.pricingService.quote(items, couponCode, tx);
 
       for (const item of quote.items) {
-        // Stock lives on the variant when there is one. The guarded
-        // updateMany is what makes this safe under concurrency: it
-        // matches zero rows if someone else took the last unit first.
         const claimed = item.variantId
           ? await tx.productVariant.updateMany({
               where: {
@@ -127,9 +121,6 @@ export class OrdersService {
       }
 
       if (quote.coupon) {
-        // Guarded increment in one statement. Prisma cannot compare two
-        // columns in a `where`, and doing it as read-then-write would let
-        // two simultaneous checkouts both claim the final use.
         const claimed = await tx.$executeRaw`
                     UPDATE coupons
                     SET "usedCount" = "usedCount" + 1
@@ -189,10 +180,10 @@ export class OrdersService {
       return newOrder;
     });
 
-    return this.wrap(order);
+    return this.wrap(order, 'Order placed successfully');
   }
 
-  // Get all orders for admin
+  // Lists every order with paging, status and search filters.
   async findAllForAdmin(query: QueryOrderDto): Promise<{
     data: OrderResponseDto[];
     total: number;
@@ -240,7 +231,7 @@ export class OrdersService {
     };
   }
 
-  // Get user current orders
+  // Lists the caller's own orders.
   async findAll(
     userId: string,
     query: QueryOrderDto,
@@ -284,7 +275,7 @@ export class OrdersService {
     };
   }
 
-  // Find order by id
+  // Loads one order, scoped to its owner unless the caller is an admin.
   async findOne(
     id: string,
     userId?: string,
@@ -312,32 +303,127 @@ export class OrdersService {
     return this.wrap(order);
   }
 
-  // Update order by admin. Only reachable from the @Roles(ADMIN) route.
+  // Returns the stock every line of a cancelled order had reserved.
+  private async restoreStock(
+    tx: Prisma.TransactionClient,
+    items: { productId: string; variantId: string | null; quantity: number }[],
+  ): Promise<void> {
+    for (const item of items) {
+      if (item.variantId) {
+        await tx.productVariant.update({
+          where: { id: item.variantId },
+          data: { stock: { increment: item.quantity } },
+        });
+        continue;
+      }
+
+      await tx.product.update({
+        where: { id: item.productId },
+        data: { stock: { increment: item.quantity } },
+      });
+    }
+  }
+
+  // A cancelled order never becomes a sale, so the redemption create() burned is
+  // handed back to the code. GREATEST keeps it from ever going negative.
+  private async releaseCoupon(
+    tx: Prisma.TransactionClient,
+    couponId: string | null,
+  ): Promise<void> {
+    if (!couponId) return;
+
+    await tx.$executeRaw`
+                UPDATE coupons
+                SET "usedCount" = GREATEST("usedCount" - 1, 0)
+                WHERE id = ${couponId}
+            `;
+  }
+
+  // Where an order may go next: forward along the fulfilment path, or out to
+  // CANCELLED while nothing has shipped yet. CANCELLED is terminal because
+  // nothing re-reserves the stock that cancelling handed back, and a shipped
+  // order must not restock either - the same rule payments.refund() applies.
+  private static readonly transitions: Record<OrderStatus, OrderStatus[]> = {
+    [OrderStatus.PENDING]: [
+      OrderStatus.PROCESSING,
+      OrderStatus.SHIPPED,
+      OrderStatus.DELIVERED,
+      OrderStatus.CANCELLED,
+    ],
+    [OrderStatus.PROCESSING]: [
+      OrderStatus.SHIPPED,
+      OrderStatus.DELIVERED,
+      OrderStatus.CANCELLED,
+    ],
+    [OrderStatus.SHIPPED]: [OrderStatus.DELIVERED],
+    [OrderStatus.DELIVERED]: [],
+    [OrderStatus.CANCELLED]: [],
+  };
+
+  // Changes an order's status, returning stock to inventory on cancellation.
   async update(
     id: string,
     updateOrderDto: UpdateOrderDto,
   ): Promise<OrderApiResponseDto<OrderResponseDto>> {
     const existing = await this.prisma.order.findUnique({
       where: { id },
+      include: { orderItems: true },
     });
     if (!existing) throw new NotFoundException(`Order ${id} not found`);
 
-    const updated = await this.prisma.order.update({
-      where: { id },
-      data: updateOrderDto,
-      include: {
-        orderItems: {
-          include: {
-            product: true,
+    const target = updateOrderDto.status;
+
+    // Re-sending the status an order already has is a no-op edit; any other
+    // move has to be one the lifecycle allows.
+    if (
+      target &&
+      target !== existing.status &&
+      !OrdersService.transitions[existing.status].includes(target)
+    ) {
+      throw new BadRequestException(
+        `An order that is ${existing.status} cannot be moved to ${target}`,
+      );
+    }
+
+    const isCancelling =
+      target === OrderStatus.CANCELLED &&
+      existing.status !== OrderStatus.CANCELLED;
+
+    const updated = await this.prisma.$transaction(async (tx) => {
+      if (isCancelling) {
+        // Claim the transition with the old status still in the predicate. Two
+        // concurrent cancels can then no longer both reach the restock loop,
+        // which is what used to hand the same units back twice.
+        const claimed = await tx.order.updateMany({
+          where: { id, status: existing.status },
+          data: { status: OrderStatus.CANCELLED },
+        });
+
+        if (claimed.count === 0) {
+          throw new BadRequestException(
+            `Order ${id} changed status while it was being cancelled; nothing was applied`,
+          );
+        }
+
+        await this.restoreStock(tx, existing.orderItems);
+        await this.releaseCoupon(tx, existing.couponId);
+      }
+
+      return tx.order.update({
+        where: { id },
+        data: updateOrderDto,
+        include: {
+          orderItems: {
+            include: {
+              product: true,
+            },
           },
+          user: true,
+          coupon: { select: { code: true } },
         },
-        user: true,
-        coupon: { select: { code: true } },
-      },
+      });
     });
 
-    // Only mail on an actual transition — re-saving the same status from the
-    // admin table should not spam the customer.
     if (updateOrderDto.status && updateOrderDto.status !== existing.status) {
       void this.notifyStatusChange(
         updated.orderNumber,
@@ -346,10 +432,10 @@ export class OrdersService {
       );
     }
 
-    return this.wrap(updated);
+    return this.wrap(updated, 'Order updated successfully');
   }
 
-  /** Best-effort notification. A failed email must not fail the update. */
+  // Emails the customer when their order's status changes.
   private async notifyStatusChange(
     orderNumber: string,
     status: OrderStatus,
@@ -371,9 +457,7 @@ export class OrdersService {
     }
   }
 
-  // Update own order. The owner may only correct the shipping address, and only
-  // while the order is still PENDING — `status` is never taken from user input,
-  // otherwise anyone could mark their unpaid order as DELIVERED.
+  // Applies the limited edits a customer may make to their own pending order.
   async updateOwn(
     id: string,
     userId: string,
@@ -406,10 +490,10 @@ export class OrdersService {
       },
     });
 
-    return this.wrap(updated);
+    return this.wrap(updated, 'Shipping address updated');
   }
 
-  // Cancel an order
+  // Cancels an order the caller owns and puts the stock back.
   async cancel(
     id: string,
     userId?: string,
@@ -433,26 +517,38 @@ export class OrdersService {
     }
 
     const cancelled = await this.prisma.$transaction(async (tx) => {
-      for (const item of order.orderItems) {
-        // Put the units back where they came from: the variant if the
-        // line had one, otherwise the product itself.
-        if (item.variantId) {
-          await tx.productVariant.update({
-            where: { id: item.variantId },
-            data: { stock: { increment: item.quantity } },
-          });
-          continue;
+      // The read above only produces a friendly error: the status is re-asserted
+      // here as part of the write, so of two racing cancels - or the expiry
+      // sweep racing a payment that just landed - exactly one gets to restock.
+      const claimed = await tx.order.updateMany({
+        where: {
+          id,
+          status: OrderStatus.PENDING,
+          NOT: { payment: { is: { status: PaymentStatus.COMPLETED } } },
+        },
+        data: { status: OrderStatus.CANCELLED },
+      });
+
+      if (claimed.count === 0) {
+        const payment = await tx.payment.findUnique({
+          where: { orderId: id },
+          select: { status: true },
+        });
+
+        if (payment?.status === PaymentStatus.COMPLETED) {
+          throw new BadRequestException(
+            'This order has already been paid and can no longer be cancelled',
+          );
         }
 
-        await tx.product.update({
-          where: { id: item.productId },
-          data: { stock: { increment: item.quantity } },
-        });
+        throw new BadRequestException('Only pending orders can be  cancelled');
       }
 
-      return tx.order.update({
+      await this.restoreStock(tx, order.orderItems);
+      await this.releaseCoupon(tx, order.couponId);
+
+      return tx.order.findUniqueOrThrow({
         where: { id },
-        data: { status: OrderStatus.CANCELLED },
         include: {
           orderItems: {
             include: {
@@ -465,22 +561,25 @@ export class OrdersService {
       });
     });
 
-    return this.wrap(cancelled);
+    return this.wrap(cancelled, 'Order cancelled');
   }
 
+  // Wraps an order in the response envelope with its message.
   private wrap(
     order: Order & {
       orderItems: (OrderItem & { product: Product })[];
       user: User;
     },
+    message = 'Order retrieved successfully',
   ): OrderApiResponseDto<OrderResponseDto> {
     return {
       success: true,
-      message: 'Order retreived successfully',
+      message,
       data: this.map(order),
     };
   }
 
+  // Shapes an order row into its API response.
   private map(
     order: Order & {
       orderItems: (OrderItem & { product: Product })[];
@@ -503,13 +602,13 @@ export class OrdersService {
       items: order.orderItems.map((item) => ({
         id: item.id,
         productId: item.productId,
-        // Snapshot from the order, not the live product: renaming a
-        // product must not rewrite what a past order says was bought.
+
         productName: item.productName,
         variantLabel: item.variantLabel,
         quantity: item.quantity,
         price: Number(item.price),
-        subtotal: Number(item.price) * item.quantity,
+        // Round through cents: 29.99 * 7 is 209.92999999999998 in raw floats.
+        subtotal: Math.round(Number(item.price) * item.quantity * 100) / 100,
         createdAt: order.createdAt,
         updatedAt: order.updatedAt,
       })),
@@ -523,24 +622,22 @@ export class OrdersService {
     };
   }
 
+  // Expires orders left unpaid past the hold window and releases their stock.
   @Cron(CronExpression.EVERY_5_MINUTES)
   async autoCancelExpiredOrders() {
     const now = Date.now();
     const abandonedCutoff = new Date(now - 15 * 60 * 1000);
-    // An order with a Stripe intent may still have the customer sitting on the
-    // payment form. Cancelling it there would release the stock and then let the
-    // charge succeed against a cancelled order, so give it a much longer grace.
+
     const inFlightCutoff = new Date(now - 60 * 60 * 1000);
 
     const expiredOrders = await this.prisma.order.findMany({
       where: {
         status: OrderStatus.PENDING,
-        // Never release an order that has already been paid for.
+
         NOT: { payment: { is: { status: PaymentStatus.COMPLETED } } },
         OR: [
-          // Never reached checkout — plain abandoned cart.
           { payment: { is: null }, createdAt: { lt: abandonedCutoff } },
-          // Payment was started but never completed.
+
           { payment: { isNot: null }, createdAt: { lt: inFlightCutoff } },
         ],
       },

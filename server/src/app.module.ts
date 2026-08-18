@@ -11,7 +11,7 @@ import { OrdersModule } from '@/modules/orders/orders.module';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { CartModule } from '@/modules/cart/cart.module';
 import { PaymentsModule } from '@/modules/payments/payments.module';
-import { APP_GUARD } from '@nestjs/core';
+import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { ScheduleModule } from '@nestjs/schedule';
 import { ContactsModule } from './modules/contacts/contacts.module';
 import { HealthModule } from '@/modules/health/health.module';
@@ -22,8 +22,11 @@ import { DashboardModule } from '@/modules/dashboard/dashboard.module';
 import { PricingModule } from '@/modules/pricing/pricing.module';
 import { AddressesModule } from '@/modules/addresses/addresses.module';
 import { CouponsModule } from '@/modules/coupons/coupons.module';
+import { AuditInterceptor } from '@/common/interceptors/audit.interceptor';
+import { SeoModule } from '@/modules/seo/seo.module';
 import { UploadsModule } from '@/modules/uploads/uploads.module';
 
+// Wires every feature module, global config, throttling and the schedule runner.
 @Module({
   imports: [
     ScheduleModule.forRoot(),
@@ -33,9 +36,8 @@ import { UploadsModule } from '@/modules/uploads/uploads.module';
     }),
     ThrottlerModule.forRoot([
       {
-        // NOTE: ttl is in MILLISECONDS since @nestjs/throttler v5.
         ttl: 60_000,
-        limit: 100, // 100 requests per minute per IP, across all routes
+        limit: 100,
       },
     ]),
     PrismaModule,
@@ -56,6 +58,7 @@ import { UploadsModule } from '@/modules/uploads/uploads.module';
     AddressesModule,
     CouponsModule,
     UploadsModule,
+    SeoModule,
   ],
   controllers: [AppController],
   providers: [
@@ -63,6 +66,12 @@ import { UploadsModule } from '@/modules/uploads/uploads.module';
     {
       provide: APP_GUARD,
       useClass: ThrottlerGuard,
+    },
+    {
+      // Global, so a new admin route is audited the day it ships rather than
+      // the day someone remembers to add a log call to its service.
+      provide: APP_INTERCEPTOR,
+      useClass: AuditInterceptor,
     },
   ],
 })

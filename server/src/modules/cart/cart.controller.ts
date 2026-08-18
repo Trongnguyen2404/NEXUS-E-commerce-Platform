@@ -25,11 +25,7 @@ import { AddToCartDto } from '@/modules/cart/dto/add-to-cart.dto';
 import { UpdateCartItemDto } from '@/modules/cart/dto/update-cart-item.dto';
 import { MergeCartDto } from '@/modules/cart/dto/merge-cart.dto';
 
-/**
- * Cart Controller
- * Handles shopping cart endpoints
- * All endpoints require authentication
- */
+// Endpoints for the signed-in user's shopping cart.
 @ApiTags('cart')
 @Controller('cart')
 @UseGuards(JwtAuthGuard)
@@ -37,10 +33,7 @@ import { MergeCartDto } from '@/modules/cart/dto/merge-cart.dto';
 export class CartController {
   constructor(private readonly cartService: CartService) {}
 
-  /**
-   * Get current user's cart
-   * GET /cart
-   */
+  // Returns the caller's cart, creating an empty one if needed.
   @Get()
   @ApiOperation({ summary: 'Get current user cart' })
   @ApiResponse({
@@ -52,10 +45,7 @@ export class CartController {
     return this.cartService.getOrCreateCart(userId);
   }
 
-  /**
-   * Add item to cart
-   * POST /cart/items
-   */
+  // Adds a product, or a specific variant, to the cart.
   @Post('items')
   @ApiOperation({ summary: 'Add item to cart' })
   @ApiBody({ type: AddToCartDto })
@@ -76,19 +66,18 @@ export class CartController {
     return this.cartService.addToCart(userId, addToCartDto);
   }
 
-  /**
-   * Update cart item quantity
-   * PATCH /cart/items/:id
-   */
+  // Changes the quantity of one cart line, and the option it points at.
   @Patch('items/:id')
-  @ApiOperation({ summary: 'Update cart item quantity' })
+  @ApiOperation({
+    summary: 'Update cart item quantity, or the option it points at',
+  })
   @ApiBody({ type: UpdateCartItemDto })
   @ApiResponse({
     status: 200,
     description: 'Cart item updated',
     type: CartResponseDto,
   })
-  @ApiResponse({ status: 404, description: 'Cart item not found' })
+  @ApiResponse({ status: 404, description: 'Cart item or option not found' })
   @ApiResponse({ status: 400, description: 'Insufficient stock' })
   async updateCartItem(
     @GetUser('id') userId: string,
@@ -98,10 +87,7 @@ export class CartController {
     return this.cartService.updateCartItem(userId, id, updateCartItemDto);
   }
 
-  /**
-   * Remove item from cart
-   * DELETE /cart/items/:id
-   */
+  // Removes one line from the cart.
   @Delete('items/:id')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Remove item from cart' })
@@ -118,10 +104,7 @@ export class CartController {
     return this.cartService.removeFromCart(userId, id);
   }
 
-  /**
-   * Clear all items from cart
-   * DELETE /cart
-   */
+  // Empties the cart.
   @Delete()
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Clear all items from cart' })
@@ -134,10 +117,7 @@ export class CartController {
     return this.cartService.clearCart(userId);
   }
 
-  /**
-   * Merge guest cart with user cart
-   * POST /cart/merge
-   */
+  // Folds a guest cart into the signed-in user's cart.
   @Post('merge')
   @ApiOperation({ summary: 'Merge guest cart into user cart' })
   @ApiBody({ type: MergeCartDto })

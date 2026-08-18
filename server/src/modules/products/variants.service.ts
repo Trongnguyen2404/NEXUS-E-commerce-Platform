@@ -12,11 +12,12 @@ import {
   VariantResponseDto,
 } from '@/modules/products/dto/variant.dto';
 
+// Variant reads and writes, keeping the parent product's stock in step.
 @Injectable()
 export class VariantsService {
   constructor(private prisma: PrismaService) {}
 
-  /** "M / Black" from { Size: "M", Color: "Black" }. */
+  // Builds the display label from a variant's options.
   static labelFor(options: Record<string, string>): string {
     const parts = Object.values(options)
       .map((value) => String(value).trim())
@@ -29,6 +30,7 @@ export class VariantsService {
     return parts.join(' / ');
   }
 
+  // Lists a product's variants.
   async findAll(productId: string): Promise<VariantResponseDto[]> {
     const product = await this.prisma.product.findUnique({
       where: { id: productId },
@@ -39,6 +41,7 @@ export class VariantsService {
     return product.variants.map((variant) => this.map(variant, product));
   }
 
+  // Creates a variant and rolls its stock into the product total.
   async create(
     productId: string,
     dto: CreateVariantDto,
@@ -69,8 +72,6 @@ export class VariantsService {
         },
       });
 
-      // Adding the first variant flips the product over: from here on its own
-      // price and stock columns stop being what customers buy against.
       if (!product.hasVariants) {
         await tx.product.update({
           where: { id: productId },
@@ -84,6 +85,7 @@ export class VariantsService {
     return this.map(variant, product);
   }
 
+  // Updates a variant and re-syncs the product's stock.
   async update(id: string, dto: UpdateVariantDto): Promise<VariantResponseDto> {
     const variant = await this.prisma.productVariant.findUnique({
       where: { id },
@@ -107,7 +109,7 @@ export class VariantsService {
         ...(dto.options
           ? {
               options: dto.options as Prisma.InputJsonValue,
-              // The label is derived, so it has to move with the options.
+
               label: VariantsService.labelFor(dto.options),
             }
           : {}),
@@ -121,6 +123,7 @@ export class VariantsService {
     return this.map(updated, variant.product);
   }
 
+  // Deletes a variant and re-syncs the product's stock.
   async remove(id: string): Promise<{ message: string }> {
     const variant = await this.prisma.productVariant.findUnique({
       where: { id },
@@ -128,8 +131,6 @@ export class VariantsService {
     });
     if (!variant) throw new NotFoundException('Variant not found');
 
-    // Past orders point at the variant to explain what was bought. Deleting one
-    // that has sold would break that, so deactivate it instead.
     if (variant._count.orderItems > 0) {
       await this.prisma.productVariant.update({
         where: { id },
@@ -143,8 +144,6 @@ export class VariantsService {
     await this.prisma.$transaction(async (tx) => {
       await tx.productVariant.delete({ where: { id } });
 
-      // Removing the last variant hands control back to the product's own
-      // price and stock columns.
       const remaining = await tx.productVariant.count({
         where: { productId: variant.productId },
       });
@@ -159,6 +158,7 @@ export class VariantsService {
     return { message: 'Variant deleted' };
   }
 
+  // Shapes a variant row into its API response.
   private map(variant: ProductVariant, product: Product): VariantResponseDto {
     return {
       id: variant.id,
@@ -166,7 +166,7 @@ export class VariantsService {
       sku: variant.sku,
       options: variant.options as Record<string, string>,
       label: variant.label,
-      // The effective price, so callers never have to know about the fallback.
+
       price: Number(variant.price ?? product.price),
       stock: variant.stock,
       imageUrl: variant.imageUrl,

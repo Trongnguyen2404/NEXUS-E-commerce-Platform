@@ -5,14 +5,17 @@ import { toast } from 'react-toastify';
 import axiosClient, { getErrorMessage } from '../api/axiosClient';
 import { useAuthStore } from '../store/useAuthStore';
 import type { AuthResponse } from '../types/api';
+import useDocumentMeta from '../hooks/useDocumentMeta';
 
+// Account creation page.
 const Register = () => {
+  useDocumentMeta({ title: 'Create account', noIndex: true });
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  
+
   const navigate = useNavigate();
   const login = useAuthStore((state) => state.login);
 
@@ -21,7 +24,6 @@ const Register = () => {
     setIsLoading(true);
 
     try {
-      // Gọi API POST /auth/register
       const response = await axiosClient.post<AuthResponse>('/auth/register', {
         firstName,
         lastName,
@@ -29,14 +31,11 @@ const Register = () => {
         password,
       });
 
-      // Đăng nhập luôn ngay sau khi đăng ký thành công
       login(response.user, response.accessToken);
 
       toast.success('Account created successfully!');
       navigate('/');
     } catch (error) {
-      // getErrorMessage bóc cả mảng lỗi của ValidationPipe lẫn message đơn của
-      // ConflictException ("User with this email already exists").
       toast.error(getErrorMessage(error, 'Registration failed. Please try again.'));
     } finally {
       setIsLoading(false);

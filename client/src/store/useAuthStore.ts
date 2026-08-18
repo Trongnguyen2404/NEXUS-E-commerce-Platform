@@ -4,9 +4,10 @@ import { useCartStore } from './useCartStore';
 import { useWishlistStore } from './useWishlistStore';
 import type { AuthResponse } from '../types/api';
 
-/** The subset of the user the API returns on login/register. */
+// The signed-in user as the auth endpoints return it.
 export type AuthUser = AuthResponse['user'];
 
+// Auth store shape: the current user, token and the actions on them.
 interface AuthState {
   user: AuthUser | null;
   isAuthenticated: boolean;
@@ -14,7 +15,7 @@ interface AuthState {
   logout: () => Promise<void>;
 }
 
-/** localStorage holds a string; anything could be in there, so parse defensively. */
+// Reads the cached user out of localStorage, tolerating bad JSON.
 const readStoredUser = (): AuthUser | null => {
   try {
     return JSON.parse(localStorage.getItem('user') || 'null') as AuthUser | null;
@@ -27,8 +28,6 @@ export const useAuthStore = create<AuthState>((set) => ({
   user: readStoredUser(),
   isAuthenticated: !!localStorage.getItem('accessToken'),
 
-  // Chỉ access token (sống 15 phút) nằm ở localStorage. Refresh token do server
-  // set bằng cookie httpOnly nên JavaScript không đọc được.
   login: (user, accessToken) => {
     localStorage.setItem('accessToken', accessToken);
     localStorage.setItem('user', JSON.stringify(user));
@@ -37,18 +36,16 @@ export const useAuthStore = create<AuthState>((set) => ({
 
   logout: async () => {
     try {
-      // Gọi API báo cho Backend xóa Refresh Token trong DB
       await axiosClient.post('/auth/logout');
     } catch (error) {
       console.error('Logout failed on server', error);
     } finally {
-      // Xóa mọi thứ ở Frontend (cookie refresh token do server tự xóa)
       localStorage.removeItem('accessToken');
       localStorage.removeItem('user');
       set({ user: null, isAuthenticated: false });
 
-      // Xóa luôn số lượng giỏ hàng và wishlist trên Navbar
-      useCartStore.setState({ cart: null, totalItems: 0 });
+      // error too, or the previous session's read failure follows the next one in.
+      useCartStore.setState({ cart: null, totalItems: 0, error: null });
       useWishlistStore.getState().clear();
     }
   },

@@ -7,7 +7,7 @@ export default {
   theme: {
     extend: {
       fontFamily: {
-        sans: ['Inter', 'system-ui', 'sans-serif'], // Font hiện đại, sang trọng
+        sans: ['Inter', 'system-ui', 'sans-serif'], // One neutral grotesque for the whole UI.
       },
 
       /**

@@ -5,13 +5,14 @@ import axiosClient, { getErrorMessage } from '../api/axiosClient';
 import ImageUpload from './ImageUpload';
 import type { ProductVariant } from '../types/api';
 
+// Props for the variant manager.
 interface Props {
   productId: string;
   productName: string;
-  /** Product's own price, shown as the fallback when a variant has none. */
+
   basePrice: number;
   onClose: () => void;
-  /** Lets the parent refresh its table — variants change price and stock. */
+
   onChanged: () => void;
 }
 
@@ -27,13 +28,7 @@ const field =
   'w-full bg-surface-muted border-2 border-transparent focus:border-black rounded-2xl py-3 px-4 text-sm font-medium outline-none transition-all';
 const label = 'block text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-2';
 
-/**
- * Parses "Size: M, Color: Black" into { Size: "M", Color: "Black" }.
- *
- * A text field rather than a dynamic key/value builder: it is far quicker to
- * type for the handful of options a variant actually has, and the parse is
- * strict enough to catch mistakes.
- */
+// Parses the comma separated 'Name: Value' text into an options object.
 const parseOptions = (text: string): Record<string, string> => {
   const options: Record<string, string> = {};
 
@@ -50,6 +45,7 @@ const parseOptions = (text: string): Record<string, string> => {
   return options;
 };
 
+// Modal for adding, editing and deleting a product's options.
 const VariantManager = ({ productId, productName, basePrice, onClose, onChanged }: Props) => {
   const [variants, setVariants] = useState<ProductVariant[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -88,10 +84,9 @@ const VariantManager = ({ productId, productName, basePrice, onClose, onChanged 
         sku: form.sku.trim(),
         options,
         stock: Number(form.stock),
-        // Blank means "inherit the product price", which is not the same as 0.
+
         ...(form.price ? { price: Number(form.price) } : {}),
-        // Same for the image: omitted rather than sent empty, so the product's
-        // own photo is used.
+
         ...(form.imageUrl ? { imageUrl: form.imageUrl } : {}),
       });
 
@@ -120,8 +115,6 @@ const VariantManager = ({ productId, productName, basePrice, onClose, onChanged 
     if (!window.confirm(`Delete "${variant.label}"?`)) return;
 
     try {
-      // A sold variant is deactivated instead of deleted, so relay the API's
-      // own wording rather than claiming it was removed.
       const res = await axiosClient.delete<{ message: string }>(`/variants/${variant.id}`);
       toast.success(res.message);
       await load();
@@ -197,8 +190,7 @@ const VariantManager = ({ productId, productName, basePrice, onClose, onChanged 
                           min={0}
                           defaultValue={variant.stock}
                           aria-label={`Stock for ${variant.label}`}
-                          // onBlur, not onChange: saving on every keystroke would
-                          // fire a request per digit.
+
                           onBlur={(e) => {
                             const next = Number(e.target.value);
                             if (next !== variant.stock) handleStock(variant, next);

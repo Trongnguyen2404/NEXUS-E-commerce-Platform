@@ -4,6 +4,7 @@ import { ArrowLeft, Loader2, MailCheck } from 'lucide-react';
 import { toast } from 'react-toastify';
 import axiosClient, { getErrorMessage } from '../api/axiosClient';
 
+// Requests a password reset link by email.
 const ForgotPassword = () => {
   const [email, setEmail] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -15,8 +16,7 @@ const ForgotPassword = () => {
 
     try {
       await axiosClient.post<{ message: string }>('/auth/forgot-password', { email });
-      // The API deliberately answers the same way for unknown addresses, so the
-      // UI must not hint either — always show the same confirmation.
+
       setIsSent(true);
     } catch (error) {
       toast.error(getErrorMessage(error, 'Could not send the reset link. Try again.'));

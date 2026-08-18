@@ -4,8 +4,8 @@ import { toast } from 'react-toastify';
 import axiosClient, { getErrorMessage } from '../api/axiosClient';
 import type { Address } from '../types/api';
 
+// Props for the address form.
 interface Props {
-  /** Supplied when editing; omitted when adding. */
   address?: Address;
   onSaved: (address: Address) => void;
   onCancel: () => void;
@@ -15,6 +15,7 @@ const field =
   'w-full bg-surface-muted border-2 border-transparent focus:border-black rounded-2xl py-3.5 px-5 text-sm font-medium outline-none transition-all';
 const label = 'block text-[10px] font-bold uppercase tracking-widest text-gray-500 mb-2';
 
+// Form for creating or editing a shipping address.
 const AddressForm = ({ address, onSaved, onCancel }: Props) => {
   const [form, setForm] = useState({
     fullName: address?.fullName ?? '',
@@ -37,8 +38,6 @@ const AddressForm = ({ address, onSaved, onCancel }: Props) => {
     setIsSaving(true);
 
     try {
-      // Optional fields are dropped rather than sent as "" — the DTO would
-      // reject an empty string where it expects a real value or nothing.
       const payload = {
         ...form,
         line2: form.line2.trim() || undefined,

@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { CategoryController } from '@/modules/category/category.controller';
 import { CategoryService } from '@/modules/category/category.service';
 
+// Category feature module.
 @Module({
   controllers: [CategoryController],
   providers: [CategoryService],

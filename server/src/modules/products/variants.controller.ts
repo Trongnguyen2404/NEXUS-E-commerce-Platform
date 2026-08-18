@@ -33,12 +33,13 @@ import {
   RelaxedThrottle,
 } from '@/common/decorators/custom-throttler.decorator';
 
+// Product variant endpoints; writes are admin only.
 @ApiTags('products')
 @Controller()
 export class VariantsController {
   constructor(private readonly variantsService: VariantsService) {}
 
-  // Public: the product page needs the options before anyone signs in.
+  // Lists a product's variants.
   @Get('products/:productId/variants')
   @RelaxedThrottle()
   @ApiOperation({ summary: 'Variants available for a product' })
@@ -49,6 +50,7 @@ export class VariantsController {
     return await this.variantsService.findAll(productId);
   }
 
+  // Adds a variant to a product; admin only.
   @Post('products/:productId/variants')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.ADMIN)
@@ -69,6 +71,7 @@ export class VariantsController {
     return await this.variantsService.create(productId, dto);
   }
 
+  // Edits a variant; admin only.
   @Patch('variants/:id')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.ADMIN)
@@ -82,6 +85,7 @@ export class VariantsController {
     return await this.variantsService.update(id, dto);
   }
 
+  // Deletes a variant; admin only.
   @Delete('variants/:id')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.ADMIN)

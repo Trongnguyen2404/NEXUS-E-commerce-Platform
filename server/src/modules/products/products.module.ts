@@ -5,8 +5,8 @@ import { VariantsController } from '@/modules/products/variants.controller';
 import { VariantsService } from '@/modules/products/variants.service';
 import { ReviewsModule } from '@/modules/reviews/reviews.module';
 
+// Product and variant feature module.
 @Module({
-  // ReviewsModule supplies the aggregate ratings attached to each product.
   imports: [ReviewsModule],
   controllers: [ProductsController, VariantsController],
   providers: [ProductsService, VariantsService],

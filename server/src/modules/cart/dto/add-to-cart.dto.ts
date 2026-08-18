@@ -8,9 +8,7 @@ import {
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
-/**
- * DTO for adding items to cart
- */
+// Body for adding a product to the cart.
 export class AddToCartDto {
   @ApiProperty({
     description: 'Product ID to add to cart',

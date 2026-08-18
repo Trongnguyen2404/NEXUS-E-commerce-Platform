@@ -2,8 +2,11 @@ import React, { useState } from 'react';
 import { Mail, MapPin, Phone, Send } from 'lucide-react';
 import { toast } from 'react-toastify';
 import axiosClient, { getErrorMessage } from '../api/axiosClient';
+import useDocumentMeta from '../hooks/useDocumentMeta';
 
+// Public contact form.
 const Contact = () => {
+  useDocumentMeta({ title: 'Contact us', description: 'Questions about an order, a return or a warranty claim? Reach the NEXUS team here.' });
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
@@ -26,8 +29,8 @@ const Contact = () => {
       toast.success('Your message has been sent successfully!');
       setFormData({ name: '', email: '', subject: '', message: '' });
     } catch (error) {
-      // Interceptor đã reject bằng chính body lỗi, nên `error.response` luôn
-      // undefined — đọc kiểu cũ khiến toast lúc nào cũng ra message mặc định.
+      
+      
       toast.error(getErrorMessage(error, 'Failed to send message'));
     } finally {
       setLoading(false);
@@ -39,10 +42,8 @@ const Contact = () => {
       <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 pt-16">
         
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-20">
-          {/* Left Side: Contact Information */}
           <div className="space-y-12">
             <div>
-              {/* Đã xóa <br/> để text nằm trên 1 hàng */}
               <h1 className="text-5xl font-black tracking-tighter text-black uppercase mb-6 leading-none">
                 Get in touch
               </h1>
@@ -84,13 +85,11 @@ const Contact = () => {
             </div>
           </div>
 
-          {/* Right Side: Contact Form */}
           <div className="bg-[#F5F5F7] p-10 rounded-[2rem] border border-gray-100 shadow-sm">
             <h2 className="text-2xl font-black uppercase tracking-tight mb-8">Send a Message</h2>
             
             <form onSubmit={handleSubmit} className="space-y-6">
               
-              {/* Row 1: Full Name & Email Address */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
                   <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2 ml-1">Full Name</label>
@@ -117,7 +116,6 @@ const Contact = () => {
                 </div>
               </div>
 
-              {/* Row 2: Subject */}
               <div>
                 <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2 ml-1">Subject</label>
                 <input 
@@ -130,7 +128,6 @@ const Contact = () => {
                 />
               </div>
 
-              {/* Row 3: Message */}
               <div>
                 <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2 ml-1">Your Message (Min 10 chars)</label>
                 <textarea 

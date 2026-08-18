@@ -1,16 +1,4 @@
-/**
- * Chart palette, kept in one place so every chart is written against roles
- * rather than raw hex.
- *
- * Single hue throughout: each chart here plots ONE series, so identity never
- * rides on color — the axis labels carry it. Colouring bars darker-where-bigger
- * would double-encode length as hue and buy nothing.
- *
- * `series` is the validated blue slot-1 step; it clears 3:1 against the white
- * card surface. `seriesWash`/`seriesSoft` are below 3:1 and are therefore only
- * ever used as area fill or an inactive track, never as a mark that carries a
- * value on its own.
- */
+
 export const chart = {
   surface: '#ffffff',
   series: '#2a78d6',
@@ -28,7 +16,7 @@ export const chart = {
   deltaDown: '#d03b3b',
 } as const;
 
-/** 1,284 → "1,284"; 12,900 → "12.9K"; 4,200,000 → "4.2M". */
+// Shortens a number for an axis label, e.g. 12400 becomes 12.4k.
 export const compactNumber = (value: number): string => {
   const abs = Math.abs(value);
   if (abs >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
@@ -36,6 +24,7 @@ export const compactNumber = (value: number): string => {
   return value.toLocaleString('en-US');
 };
 
+// Shortens a money value for an axis label.
 export const compactMoney = (value: number): string => {
   const abs = Math.abs(value);
   if (abs >= 1_000_000) return `$${(value / 1_000_000).toFixed(1)}M`;
@@ -43,10 +32,7 @@ export const compactMoney = (value: number): string => {
   return `$${value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 };
 
-/**
- * Rounds an axis maximum up to a clean 1/2/5 × 10ⁿ step so ticks read
- * 0 / 500 / 1,000 rather than 0 / 437 / 874.
- */
+// Rounds an axis maximum up to a readable value.
 export const niceCeiling = (value: number): number => {
   if (value <= 0) return 1;
 

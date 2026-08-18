@@ -22,6 +22,7 @@ import {
   RelaxedThrottle,
 } from '@/common/decorators/custom-throttler.decorator';
 
+// Endpoints for the signed-in user's saved products.
 @ApiTags('wishlist')
 @ApiBearerAuth('JWT-auth')
 @UseGuards(JwtAuthGuard)
@@ -29,6 +30,7 @@ import {
 export class WishlistController {
   constructor(private readonly wishlistService: WishlistService) {}
 
+  // Lists the caller's saved products.
   @Get()
   @RelaxedThrottle()
   @ApiOperation({ summary: 'Products you have saved' })
@@ -37,6 +39,7 @@ export class WishlistController {
     return await this.wishlistService.findAll(userId);
   }
 
+  // Saves a product to the wishlist.
   @Post(':productId')
   @ModerateThrottle()
   @ApiOperation({
@@ -52,6 +55,7 @@ export class WishlistController {
     return await this.wishlistService.add(userId, productId);
   }
 
+  // Adds or removes a product depending on whether it is already saved.
   @Post(':productId/toggle')
   @ModerateThrottle()
   @ApiOperation({
@@ -66,6 +70,7 @@ export class WishlistController {
     return await this.wishlistService.toggle(userId, productId);
   }
 
+  // Removes a product from the wishlist.
   @Delete(':productId')
   @ModerateThrottle()
   @ApiOperation({ summary: 'Remove a product from your wishlist' })

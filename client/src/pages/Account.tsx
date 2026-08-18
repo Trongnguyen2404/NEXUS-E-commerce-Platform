@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useCallback, useEffect, useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/useAuthStore';
 import { 
   User, Mail, LogOut, Loader2, Package,
@@ -9,10 +9,12 @@ import {
 import { toast } from 'react-toastify';
 import axiosClient, { getErrorMessage } from '../api/axiosClient';
 import AddressBook from '../components/AddressBook';
+import Pagination from '../components/Pagination';
 import type { Order, OrderStatus, PageResponse, User as ApiUser } from '../types/api';
+import useDocumentMeta from '../hooks/useDocumentMeta';
 
-// Same tinted treatment as the admin order table, so one status never wears two
-// different colours depending on which page you are on.
+
+
 const ORDER_STATUS_STYLES: Record<OrderStatus, string> = {
   PENDING: 'bg-state-warning-soft text-state-warning',
   PROCESSING: 'bg-state-info-soft text-state-info',
@@ -21,12 +23,18 @@ const ORDER_STATUS_STYLES: Record<OrderStatus, string> = {
   CANCELLED: 'bg-state-danger-soft text-state-danger',
 };
 
+const ORDERS_PER_PAGE = 10;
+
+// Account area: order history, addresses, profile and password.
 const Account = () => {
+  useDocumentMeta({ title: 'Your account', noIndex: true });
   const { user, logout } = useAuthStore();
   const navigate = useNavigate();
   
   const [profile, setProfile] = useState<ApiUser | null>(null);
   const [orders, setOrders] = useState<Order[]>([]);
+  const [orderPage, setOrderPage] = useState(1);
+  const [orderTotal, setOrderTotal] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'orders' | 'addresses' | 'settings' | 'security'>('orders');
   const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
@@ -35,20 +43,23 @@ const Account = () => {
   const [passwordForm, setPasswordForm] = useState({ currentPassword: '', newPassword: '' });
   const [isUpdating, setIsUpdating] = useState(false);
 
-  // Hàm bóc tách và hiển thị lỗi từ Backend NestJS
+  
   const showBackendError = (err: unknown, defaultMessage: string) => {
     console.error('Backend error:', err);
     toast.error(getErrorMessage(err, defaultMessage));
   };
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     try {
       const [profileRes, ordersRes] = await Promise.all([
         axiosClient.get<ApiUser>('/users/me'),
-        axiosClient.get<PageResponse<Order>>('/orders')
+        axiosClient.get<PageResponse<Order>>('/orders', {
+          params: { page: orderPage, limit: ORDERS_PER_PAGE },
+        })
       ]);
       setProfile(profileRes);
       setOrders(Array.isArray(ordersRes?.data) ? ordersRes.data : []);
+      setOrderTotal(ordersRes?.total ?? 0);
       setProfileForm({ 
         firstName: profileRes?.firstName || '', 
         lastName: profileRes?.lastName || '' 
@@ -58,12 +69,12 @@ const Account = () => {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [orderPage]);
 
   useEffect(() => {
     if (!user) { navigate('/login'); return; }
     fetchData();
-  }, [user]);
+  }, [user, navigate, fetchData]);
 
   const toggleOrder = (id: string) => setExpandedOrderId(expandedOrderId === id ? null : id);
 
@@ -115,7 +126,6 @@ const Account = () => {
 
   return (
     <div className="min-h-screen bg-[#EDEDF0] pb-24">
-      {/* SECTION 1: DYNAMIC HEADER */}
       <div className="bg-white border-b border-gray-200 pt-10 pb-10">
         <div className="max-w-[1200px] mx-auto px-6">
           <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
@@ -137,7 +147,7 @@ const Account = () => {
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
                   className={`flex items-center space-x-2 px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
-                    activeTab === tab.id ? 'bg-white text-black shadow-sm' : 'text-gray-400 hover:text-black'
+                    activeTab === tab.id ? 'bg-white text-black shadow-sm' : 'text-gray-600 hover:text-black'
                   }`}
                 >
                   <tab.icon size={14} />
@@ -152,14 +162,13 @@ const Account = () => {
       <div className="max-w-[1200px] mx-auto px-6 mt-12">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
           
-          {/* SIDEBAR: MINI PROFILE */}
           <div className="lg:col-span-4">
             <div className="bg-white rounded-[2.5rem] p-10 border border-gray-200 shadow-sm sticky top-24">
               <div className="relative inline-block mb-8">
                 <div className="w-24 h-24 bg-black rounded-[2rem] flex items-center justify-center shadow-2xl shadow-black/20">
                   <User size={40} className="text-white" />
                 </div>
-                <div className="absolute -bottom-2 -right-2 bg-green-500 w-6 h-6 rounded-full border-4 border-white"></div>
+                <div className="absolute -bottom-2 -right-2 bg-state-success w-6 h-6 rounded-full border-4 border-white"></div>
               </div>
               
               <h2 className="text-3xl font-black uppercase tracking-tight text-black leading-tight mb-2">
@@ -183,31 +192,40 @@ const Account = () => {
 
               <button 
                 onClick={() => { logout(); navigate('/login'); }}
-                className="w-full mt-12 flex items-center justify-center space-x-3 text-red-500 font-black uppercase tracking-widest text-[10px] py-5 rounded-2xl bg-red-50 hover:bg-red-500 hover:text-white transition-all shadow-sm"
+                className="w-full mt-12 flex items-center justify-center space-x-3 text-state-danger font-black uppercase tracking-widest text-[10px] py-5 rounded-2xl bg-state-danger-soft hover:bg-state-danger hover:text-white transition-all shadow-sm"
               >
                 <LogOut size={16} />
                 <span>Sign Out</span>
               </button>
             </div>
           </div>
-          {/* MAIN CONTENT AREA */}
           <div className="lg:col-span-8">
             <div className="bg-white rounded-[3rem] border border-gray-200 shadow-sm overflow-hidden min-h-[600px]">
               
-              {/* TAB: ORDERS */}
               {activeTab === 'orders' && (
                 <div className="p-8 sm:p-12">
                   <div className="flex items-center justify-between mb-12">
                     <h3 className="text-2xl font-black uppercase tracking-tight text-black italic">Order History</h3>
                     <div className="bg-black text-white px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-tighter">
-                      {orders.length} Orders
+                      {orderTotal} Orders
                     </div>
                   </div>
 
                   {orders.length === 0 ? (
-                    <div className="text-center py-24 bg-[#F5F5F7] rounded-[2rem] border-2 border-dashed border-gray-200">
-                      <Package size={48} className="mx-auto text-gray-300 mb-4" />
-                      <p className="text-gray-400 font-bold uppercase text-xs tracking-widest">Your setup is empty.</p>
+                    <div className="text-center py-20 bg-[#F5F5F7] rounded-[2rem] border-2 border-dashed border-gray-200">
+                      <Package size={44} className="mx-auto text-gray-300 mb-5" />
+                      <h4 className="text-lg font-black uppercase tracking-tight text-black mb-2">
+                        No orders yet
+                      </h4>
+                      <p className="text-sm font-medium text-gray-500 max-w-xs mx-auto mb-7">
+                        When you place an order it will show up here with its tracking status.
+                      </p>
+                      <Link
+                        to="/products"
+                        className="inline-flex items-center gap-2 bg-black text-white px-7 py-3.5 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-gray-800 transition-colors"
+                      >
+                        Start shopping
+                      </Link>
                     </div>
                   ) : (
                     <div className="space-y-6">
@@ -215,7 +233,6 @@ const Account = () => {
                         const isExpanded = expandedOrderId === order.id;
                         return (
                           <div key={order.id} className="group border border-gray-100 rounded-[2rem] overflow-hidden transition-all hover:border-black hover:shadow-xl hover:shadow-black/5">
-                            {/* Header Summary */}
                             <div 
                               onClick={() => toggleOrder(order.id)}
                               className={`p-8 flex items-center justify-between cursor-pointer transition-colors ${order.status === 'CANCELLED' ? 'bg-gray-50' : 'bg-white'}`}
@@ -241,7 +258,6 @@ const Account = () => {
                               </div>
                             </div>
 
-                            {/* Expanded Details */}
                             {isExpanded && (
                               <div className="bg-gray-100 border-t border-gray-200 p-8 space-y-8 animate-in slide-in-from-top-4 duration-300 shadow-inner">
                                 <div className="space-y-4">
@@ -279,7 +295,7 @@ const Account = () => {
                                   {order.status === 'PENDING' && (
                                     <button 
                                       onClick={(e) => handleCancelOrder(e, order.id)}
-                                      className="flex items-center space-x-2 text-red-500 bg-red-50 hover:bg-red-500 hover:text-white px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all"
+                                      className="flex items-center space-x-2 text-state-danger bg-state-danger-soft hover:bg-state-danger hover:text-white px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all"
                                     >
                                       <XCircle size={14} />
                                       <span>Cancel This Order</span>
@@ -293,10 +309,17 @@ const Account = () => {
                       })}
                     </div>
                   )}
+
+                  <Pagination
+                    page={orderPage}
+                    totalPages={Math.ceil(orderTotal / ORDERS_PER_PAGE)}
+                    total={orderTotal}
+                    onChange={setOrderPage}
+                    label="orders"
+                  />
                 </div>
               )}
 
-              {/* TAB: SETTINGS */}
               {activeTab === 'addresses' && (
                 <div>
                   <h3 className="text-xl font-black uppercase tracking-tight mb-2">Shipping addresses</h3>
@@ -332,7 +355,6 @@ const Account = () => {
                 </div>
               )}
 
-              {/* TAB: SECURITY */}
               {activeTab === 'security' && (
                 <div className="p-8 sm:p-12 animate-in fade-in duration-500">
                   <div className="mb-12">
@@ -357,7 +379,6 @@ const Account = () => {
                       Update Credentials
                     </button>
                   </form>
-                  {/* Danger Zone: Xóa tài khoản */}
                   <div className="mt-16 pt-10 border-t border-gray-200">
                     <h4 className="text-sm font-black uppercase text-state-danger tracking-widest mb-2">Danger Zone</h4>
                     <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-6 leading-relaxed">
@@ -368,7 +389,7 @@ const Account = () => {
                       onClick={async () => {
                         if (window.confirm('WARNING: Are you absolutely sure you want to delete your account? All your data will be lost forever.')) {
                           try {
-                            await axiosClient.delete('/users/me'); // Gọi API xóa tài khoản
+                            await axiosClient.delete('/users/me'); 
                             toast.success('Account deleted permanently.');
                             await logout();
                             navigate('/');

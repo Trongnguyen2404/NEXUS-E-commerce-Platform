@@ -1,6 +1,7 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { IsNotEmpty, IsString, Matches, MinLength } from 'class-validator';
 
+// Body for changing your own password.
 export class ChangePasswordDto {
   @ApiProperty({
     description: 'New password for the user',

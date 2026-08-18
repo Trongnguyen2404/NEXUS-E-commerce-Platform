@@ -1,5 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 
+// Envelope wrapping any order payload with a message.
 export class OrderApiResponseDto<T> {
   @ApiProperty({
     description: 'Indicates if the request was successfull',
@@ -20,6 +21,7 @@ export class OrderApiResponseDto<T> {
   message: string;
 }
 
+// One order line as returned by the API.
 export class OrderItemResponseDto {
   @ApiProperty()
   id: string;
@@ -54,6 +56,7 @@ export class OrderItemResponseDto {
   updatedAt: Date;
 }
 
+// Order as returned by the API.
 export class OrderResponseDto {
   @ApiProperty()
   id: string;
@@ -67,7 +70,6 @@ export class OrderResponseDto {
   @ApiProperty()
   status: string;
 
-  // The full breakdown, so an order can explain its own arithmetic.
   @ApiProperty({ description: 'Goods before discount, shipping and tax' })
   subtotal: number;
 
@@ -101,6 +103,7 @@ export class OrderResponseDto {
   updatedAt: Date;
 }
 
+// A page of orders with its paging metadata.
 export class PaginatedOrderResponseDto {
   @ApiProperty({
     type: [OrderResponseDto],

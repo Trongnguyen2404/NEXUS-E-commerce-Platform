@@ -1,6 +1,7 @@
 import { IsEmail, IsNotEmpty, IsString, MinLength } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
+// Body accepted from the public contact form.
 export class CreateContactDto {
   @ApiProperty({ example: 'John Doe' })
   @IsNotEmpty()

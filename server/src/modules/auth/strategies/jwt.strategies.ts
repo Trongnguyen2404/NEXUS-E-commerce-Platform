@@ -1,11 +1,10 @@
-// Jwt Strategy for auth req
-
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
 import { PrismaService } from '@/prisma/prisma.service';
 import { ConfigService } from '@nestjs/config';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 
+// Validates the bearer access token on protected routes.
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
   constructor(
@@ -19,7 +18,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     });
   }
 
-  // Validate the JWT payload
+  // Loads the user named by the token payload.
   async validate(payload: { sub: string; email: string }) {
     const user = await this.prisma.user.findUnique({
       where: { id: payload.sub },
@@ -31,7 +30,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
         role: true,
         createdAt: true,
         updatedAt: true,
-        password: false, // Exclude password from the returned user object
+        password: false,
       },
     });
 

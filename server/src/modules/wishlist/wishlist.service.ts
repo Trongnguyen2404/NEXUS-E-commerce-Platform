@@ -4,6 +4,7 @@ import { ProductResponseDto } from '@/modules/products/dto/product-response.dto'
 import { ReviewsService } from '@/modules/reviews/reviews.service';
 import { Category, Product, ProductVariant } from '@prisma/client';
 
+// Reads and writes the user's saved products.
 @Injectable()
 export class WishlistService {
   constructor(
@@ -11,6 +12,7 @@ export class WishlistService {
     private reviewsService: ReviewsService,
   ) {}
 
+  // Lists saved products with their ratings.
   async findAll(
     userId: string,
   ): Promise<{ data: ProductResponseDto[]; total: number }> {
@@ -33,10 +35,7 @@ export class WishlistService {
     };
   }
 
-  /**
-   * Idempotent: adding something already saved is a no-op rather than a 409.
-   * A heart button that errors on a double click is worse than one that doesn't.
-   */
+  // Saves a product, ignoring a repeat save.
   async add(
     userId: string,
     productId: string,
@@ -56,7 +55,7 @@ export class WishlistService {
     return { message: 'Added to your wishlist', inWishlist: true };
   }
 
-  /** Also idempotent — removing something absent is still "not in the wishlist". */
+  // Removes a saved product.
   async remove(
     userId: string,
     productId: string,
@@ -65,7 +64,7 @@ export class WishlistService {
     return { message: 'Removed from your wishlist', inWishlist: false };
   }
 
-  /** Single round trip for the heart button on a product page. */
+  // Flips a product's saved state and reports the new one.
   async toggle(
     userId: string,
     productId: string,
@@ -80,8 +79,7 @@ export class WishlistService {
       : this.add(userId, productId);
   }
 
-  // Mirrors ProductsService.formatProduct so the wishlist returns product
-  // objects in exactly the shape the client already renders.
+  // Shapes a saved product into its API response.
   private formatProduct(
     product: Product & { category: Category; variants: ProductVariant[] },
     rating?: { average: number; total: number },
@@ -92,8 +90,9 @@ export class WishlistService {
 
     return {
       ...product,
-      // Mirrors ProductsService.formatProduct: for a variant product the price
-      // shown is the cheapest option and the stock is the buyable total.
+
+      images: product.imageUrl ? [product.imageUrl] : [],
+
       price:
         product.hasVariants && activeVariants.length > 0
           ? Math.min(

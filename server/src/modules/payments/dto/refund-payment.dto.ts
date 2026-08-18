@@ -8,6 +8,7 @@ import {
   Min,
 } from 'class-validator';
 
+// Body for refunding a payment, in full or in part.
 export class RefundPaymentDto {
   @ApiPropertyOptional({
     description:

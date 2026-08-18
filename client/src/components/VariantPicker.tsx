@@ -1,22 +1,22 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { ProductVariant } from '../types/api';
 
+// Props for the variant picker.
 interface Props {
   variants: ProductVariant[];
   onChange: (variant: ProductVariant | null) => void;
 }
 
-/**
- * Turns a flat list of variants into one row of choices per option name.
- *
- * The server stores each variant as a whole combination ({ Size: "M", Color:
- * "Black" }); shoppers pick one attribute at a time, so the groups are derived
- * here rather than stored separately.
- */
+// Lets the shopper choose one value per option and reports the matching variant.
+//
+// The groups narrow left to right: the first one always offers everything, and
+// each later one offers only what the choices above it actually come in. On a
+// catalogue where the options pair up one-to-one this means picking the ports
+// leaves a single finish, which is the honest answer — the alternative was
+// three finish buttons that all silently rewrote the ports when clicked.
 const VariantPicker = ({ variants, onChange }: Props) => {
   const active = useMemo(() => variants.filter((v) => v.isActive), [variants]);
 
-  /** { Size: ["S","M"], Color: ["Black","Red"] }, insertion-ordered. */
   const groups = useMemo(() => {
     const result = new Map<string, string[]>();
 
@@ -31,16 +31,11 @@ const VariantPicker = ({ variants, onChange }: Props) => {
     return result;
   }, [active]);
 
-  // What the shopper has explicitly picked; null until they touch anything.
   const [picked, setPicked] = useState<Record<string, string> | null>(null);
 
-  // The default is derived during render rather than written by an effect —
-  // setting state inside an effect just to seed it causes a second render pass
-  // (and React's lint rule rightly objects).
   const defaultSelection = useMemo(() => {
     if (active.length === 0) return {};
-    // First combination that is actually in stock, so the common case is one
-    // click. Falls back to the first active variant when everything is out.
+
     return (active.find((v) => v.stock > 0) ?? active[0]).options;
   }, [active]);
 
@@ -49,9 +44,15 @@ const VariantPicker = ({ variants, onChange }: Props) => {
 
   const matched = useMemo(
     () =>
-      active.find((variant) =>
-        Object.entries(variant.options).every(([name, value]) => selection[name] === value),
-      ) ?? null,
+      active.find((variant) => {
+        const options = Object.entries(variant.options);
+        // Compare the key sets too. Checking only that the variant's own options
+        // agree with the selection let a variant with FEWER options win: one
+        // declaring just { Ports } matched a { Ports, Finish } selection and the
+        // cart got the wrong SKU.
+        if (options.length !== Object.keys(selection).length) return false;
+        return options.every(([name, value]) => selection[name] === value);
+      }) ?? null,
     [active, selection],
   );
 
@@ -59,20 +60,10 @@ const VariantPicker = ({ variants, onChange }: Props) => {
     onChange(matched);
   }, [matched, onChange]);
 
-  /**
-   * Picks a value, then moves the other attributes to the nearest combination
-   * that actually exists.
-   *
-   * Without this, choosing a perfectly valid colour can dead-end: with S
-   * selected and only M available in Silver, clicking Silver would leave the
-   * shopper on "S / Silver", which is not a real product. Real shops resolve
-   * this for you; the alternative is a picker that punishes exploring.
-   */
   const choose = (name: string, value: string) => {
     const candidates = active.filter((variant) => variant.options[name] === value);
     if (candidates.length === 0) return;
 
-    // Prefer in-stock, then whichever keeps the most of the current choices.
     const score = (variant: ProductVariant) =>
       (variant.stock > 0 ? 100 : 0) +
       Object.entries(selection).filter(
@@ -84,63 +75,94 @@ const VariantPicker = ({ variants, onChange }: Props) => {
     setSelection(best.options);
   };
 
-  /** Is there any in-stock variant if this one value were chosen? */
-  const isAvailable = (name: string, value: string) =>
-    active.some(
-      (variant) =>
-        variant.options[name] === value &&
-        variant.stock > 0 &&
-        // Respect the other groups the shopper has already narrowed down.
-        Object.entries(selection).every(
-          ([otherName, otherValue]) =>
-            otherName === name || variant.options[otherName] === otherValue,
+  const names = [...groups.keys()];
+
+  // What each group offers, given only the groups to its left. Constraining by
+  // every other group instead would collapse the first group to one value too,
+  // leaving nothing to change.
+  const offered = useMemo(() => {
+    const result = new Map<string, string[]>();
+
+    names.forEach((name, index) => {
+      const earlier = names.slice(0, index);
+      const reachable = active.filter((variant) =>
+        earlier.every((other) => variant.options[other] === selection[other]),
+      );
+
+      result.set(
+        name,
+        (groups.get(name) ?? []).filter((value) =>
+          reachable.some((variant) => variant.options[name] === value),
         ),
-    );
+      );
+    });
+
+    return result;
+    // names is derived from groups, so groups covers it.
+  }, [active, groups, selection]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Sold out in every combination it appears in, not merely in this one.
+  const soldOutEverywhere = (name: string, value: string) =>
+    !active.some((variant) => variant.options[name] === value && variant.stock > 0);
 
   if (groups.size === 0) return null;
 
   return (
     <div className="space-y-6 mb-8">
-      {[...groups.entries()].map(([name, values]) => (
-        <div key={name}>
-          <div className="flex items-baseline justify-between mb-3">
-            <span className="text-[10px] font-bold uppercase tracking-widest text-gray-500">
-              {name}
-            </span>
-            {selection[name] && (
-              <span className="text-xs font-bold text-black">{selection[name]}</span>
+      {names.map((name) => {
+        const all = groups.get(name) ?? [];
+        const shown = offered.get(name) ?? [];
+        const hidden = all.filter((value) => !shown.includes(value));
+
+        return (
+          <div key={name}>
+            <div className="flex items-baseline justify-between mb-3">
+              <span className="text-[10px] font-bold uppercase tracking-widest text-gray-500">
+                {name}
+              </span>
+              {selection[name] && (
+                <span className="text-xs font-bold text-black">{selection[name]}</span>
+              )}
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              {shown.map((value) => {
+                const isSelected = selection[name] === value;
+                const soldOut = soldOutEverywhere(name, value);
+
+                return (
+                  <button
+                    key={value}
+                    type="button"
+                    aria-pressed={isSelected}
+                    onClick={() => choose(name, value)}
+                    title={soldOut ? `${value} is sold out` : undefined}
+                    className={`px-5 py-3 rounded-xl text-xs font-black uppercase tracking-widest border-2 transition-all ${
+                      isSelected
+                        ? 'border-black bg-black text-white'
+                        : soldOut
+                          ? 'border-gray-100 bg-surface-muted text-gray-300 line-through hover:border-gray-300'
+                          : 'border-gray-200 bg-white text-black hover:border-black'
+                    }`}
+                  >
+                    {value}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Without this the shopper would never learn the product exists in
+                the finishes this combination happens to exclude. */}
+            {hidden.length > 0 && (
+              <p className="mt-2.5 text-[11px] font-medium text-gray-500">
+                Also comes in{' '}
+                <span className="font-bold text-gray-700">{hidden.join(', ')}</span> — change{' '}
+                {names[names.indexOf(name) - 1] ?? 'your selection'} to see them.
+              </p>
             )}
           </div>
-
-          <div className="flex flex-wrap gap-2">
-            {values.map((value) => {
-              const isSelected = selection[name] === value;
-              const available = isAvailable(name, value);
-
-              return (
-                <button
-                  key={value}
-                  type="button"
-                  aria-pressed={isSelected}
-                  onClick={() => choose(name, value)}
-                  className={`px-5 py-3 rounded-xl text-xs font-black uppercase tracking-widest border-2 transition-all ${
-                    isSelected
-                      ? 'border-black bg-black text-white'
-                      : available
-                        ? 'border-gray-200 bg-white text-black hover:border-black'
-                        : // Still selectable — the shopper may want to change
-                          // another attribute to make it work — but visibly
-                          // marked as unavailable in the current combination.
-                          'border-gray-100 bg-surface-muted text-gray-300 line-through'
-                  }`}
-                >
-                  {value}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      ))}
+        );
+      })}
 
       <div className="text-xs font-medium">
         {!matched ? (

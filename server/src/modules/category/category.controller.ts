@@ -30,12 +30,13 @@ import { CategoryResponseDto } from '@/modules/category/dto/category-response.dt
 import { QueryCategoryDto } from '@/modules/category/dto/query-category.dto';
 import { UpdateCategoryDto } from '@/modules/category/dto/update-category.dto';
 
+// Category endpoints: public reads, admin-only writes.
 @ApiTags('Categories')
 @Controller('categories')
 export class CategoryController {
   constructor(private readonly categoryService: CategoryService) {}
 
-  // Create a new category
+  // Creates a category; admin only.
   @Post()
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.ADMIN)
@@ -52,7 +53,7 @@ export class CategoryController {
     return await this.categoryService.create(createCategoryDto);
   }
 
-  // Get all categories
+  // Lists categories with paging, search and a live product count.
   @Get()
   @UsePipes(
     new ValidationPipe({
@@ -87,7 +88,7 @@ export class CategoryController {
     return await this.categoryService.findAll(queryDto);
   }
 
-  // Get category by ID
+  // Returns one category by id.
   @Get(':id')
   @ApiOperation({ summary: 'Get category by ID' })
   @ApiResponse({
@@ -103,7 +104,7 @@ export class CategoryController {
     return await this.categoryService.findOne(id);
   }
 
-  // Get category by slug
+  // Returns one category by its URL slug.
   @Get('slug/:slug')
   @ApiOperation({
     summary: 'Get category by slug',
@@ -118,7 +119,7 @@ export class CategoryController {
     return await this.categoryService.findBySlug(slug);
   }
 
-  // Update category ( Admin only)
+  // Edits a category; admin only.
   @Patch(':id')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.ADMIN)
@@ -147,7 +148,7 @@ export class CategoryController {
     return await this.categoryService.update(id, updateCategoryDto);
   }
 
-  // Delete category (Admin only)
+  // Deletes a category; admin only.
   @Delete(':id')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.ADMIN)

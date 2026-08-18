@@ -1,10 +1,7 @@
 import { Global, Module } from '@nestjs/common';
 import { MailService } from '@/modules/mail/mail.service';
 
-/**
- * Global so auth, orders and payments can all inject MailService without each
- * importing MailModule — there is only ever one transporter.
- */
+// Makes the mail service available everywhere.
 @Global()
 @Module({
   providers: [MailService],

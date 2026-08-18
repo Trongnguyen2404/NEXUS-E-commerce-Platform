@@ -1,5 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
+// One review as returned by the API.
 export class ReviewResponseDto {
   @ApiProperty() id: string;
   @ApiProperty() rating: number;
@@ -20,6 +21,7 @@ export class ReviewResponseDto {
   @ApiProperty() updatedAt: Date;
 }
 
+// Average rating and the count for each star level.
 export class ReviewSummaryDto {
   @ApiProperty({
     description: 'Mean rating, rounded to one decimal',
@@ -37,6 +39,7 @@ export class ReviewSummaryDto {
   distribution: Record<number, number>;
 }
 
+// A page of reviews plus the product's rating summary.
 export class PaginatedReviewsDto {
   @ApiProperty({ type: [ReviewResponseDto] })
   data: ReviewResponseDto[];

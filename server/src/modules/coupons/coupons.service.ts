@@ -11,10 +11,12 @@ import {
   UpdateCouponDto,
 } from '@/modules/coupons/dto/coupon.dto';
 
+// Promo code reads and writes.
 @Injectable()
 export class CouponsService {
   constructor(private prisma: PrismaService) {}
 
+  // Lists every promo code, newest first.
   async findAll(): Promise<CouponResponseDto[]> {
     const coupons = await this.prisma.coupon.findMany({
       orderBy: { createdAt: 'desc' },
@@ -22,6 +24,7 @@ export class CouponsService {
     return coupons.map((coupon) => this.map(coupon));
   }
 
+  // Creates a promo code, rejecting a code that already exists.
   async create(dto: CreateCouponDto): Promise<CouponResponseDto> {
     const code = dto.code.trim().toUpperCase();
 
@@ -47,6 +50,7 @@ export class CouponsService {
     return this.map(coupon);
   }
 
+  // Updates a promo code.
   async update(id: string, dto: UpdateCouponDto): Promise<CouponResponseDto> {
     const existing = await this.prisma.coupon.findUnique({ where: { id } });
     if (!existing) throw new NotFoundException('Coupon not found');
@@ -67,6 +71,7 @@ export class CouponsService {
     return this.map(coupon);
   }
 
+  // Deletes a promo code.
   async remove(id: string): Promise<{ message: string }> {
     const coupon = await this.prisma.coupon.findUnique({
       where: { id },
@@ -74,8 +79,6 @@ export class CouponsService {
     });
     if (!coupon) throw new NotFoundException('Coupon not found');
 
-    // Orders reference the coupon to explain their own discount. Deleting one
-    // that has been used would orphan that explanation, so deactivate instead.
     if (coupon._count.orders > 0) {
       const deactivated = await this.prisma.coupon.update({
         where: { id },
@@ -90,10 +93,7 @@ export class CouponsService {
     return { message: 'Coupon deleted' };
   }
 
-  /**
-   * Update payload only. Every key is conditional so an omitted field is left
-   * untouched rather than nulled — PATCH semantics, not PUT.
-   */
+  // Normalises DTO fields into the shape Prisma expects.
   private toData(dto: UpdateCouponDto, code?: string) {
     return {
       ...(code ? { code } : {}),
@@ -106,16 +106,19 @@ export class CouponsService {
         ? { maxDiscount: dto.maxDiscount }
         : {}),
       ...(dto.maxUses !== undefined ? { maxUses: dto.maxUses } : {}),
+      // An explicit null means "no window at all". new Date(null) is the epoch,
+      // which used to write an expiry in 1970 and kill the code on the spot.
       ...(dto.startsAt !== undefined
-        ? { startsAt: new Date(dto.startsAt) }
+        ? { startsAt: dto.startsAt === null ? null : new Date(dto.startsAt) }
         : {}),
       ...(dto.expiresAt !== undefined
-        ? { expiresAt: new Date(dto.expiresAt) }
+        ? { expiresAt: dto.expiresAt === null ? null : new Date(dto.expiresAt) }
         : {}),
       ...(dto.isActive !== undefined ? { isActive: dto.isActive } : {}),
     };
   }
 
+  // Shapes a coupon row into its API response.
   private map(coupon: Coupon): CouponResponseDto {
     return {
       id: coupon.id,

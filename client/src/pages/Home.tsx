@@ -1,12 +1,33 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ArrowRight, Loader2, ShieldCheck, Zap, Globe } from 'lucide-react';
+import { ArrowRight, Loader2, ShieldCheck, Zap, Globe, RotateCcw } from 'lucide-react';
 import axiosClient from '../api/axiosClient';
-import { PRODUCT_PLACEHOLDER } from '../components/productPlaceholder';
+import ProductCard from '../components/ProductCard';
+import CategoryArt from '../components/CategoryArt';
+import { pickNewArrivals } from '../components/newArrivals';
+import useQuickAdd from '../hooks/useQuickAdd';
 import type { Category, PageResponse, PaginatedResponse, Product } from '../types/api';
+import useDocumentMeta from '../hooks/useDocumentMeta';
 
+// Keep the category row full even when the store has 2 or 3 collections.
+const CATEGORY_GRID: Record<number, string> = {
+  1: 'grid-cols-1',
+  2: 'grid-cols-1 sm:grid-cols-2',
+  3: 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3',
+};
+
+const PROMISES = [
+  { icon: Globe, title: 'Global shipping', copy: 'Fast, tracked delivery to over 100 countries worldwide.' },
+  { icon: ShieldCheck, title: '2-year warranty', copy: 'Every piece of gear is backed by our hardware warranty.' },
+  { icon: RotateCcw, title: '30-day returns', copy: 'Changed your mind? Send it back within 30 days, free.' },
+  { icon: Zap, title: 'Peak performance', copy: 'Engineered for uncompromising speed and precision.' },
+];
+
+// Landing page: hero, promises, categories and new arrivals.
 const Home = () => {
+  useDocumentMeta({ title: 'NEXUS', description: 'Premium electronics and audio, engineered for people who work with their gear every day. Free shipping over $100, two-year warranty, 30-day returns.' });
   const navigate = useNavigate();
+  const { quickAdd, addingId } = useQuickAdd();
   const [categories, setCategories] = useState<Category[]>([]);
   const [featuredProducts, setFeaturedProducts] = useState<Product[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -15,10 +36,10 @@ const Home = () => {
     const fetchHomeData = async () => {
       setIsLoading(true);
       try {
-        // Fetch both Categories and Products concurrently from your Backend
+
         const [catRes, prodRes] = await Promise.all([
           axiosClient.get<PageResponse<Category>>('/categories', { params: { limit: 4 } }),
-          axiosClient.get<PaginatedResponse<Product>>('/products', { params: { limit: 4 } })
+          axiosClient.get<PaginatedResponse<Product>>('/products', { params: { limit: 8 } })
         ]);
 
         setCategories(catRes.data || []);
@@ -32,6 +53,8 @@ const Home = () => {
     fetchHomeData();
   }, []);
 
+  const newArrivals = useMemo(() => pickNewArrivals(featuredProducts), [featuredProducts]);
+
   if (isLoading) {
     return (
       <div className="h-[80vh] flex items-center justify-center">
@@ -42,7 +65,6 @@ const Home = () => {
 
   return (
     <div className="bg-white">
-      {/* HERO SECTION */}
       <section className="relative bg-[#F5F5F7] overflow-hidden">
         <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex flex-col lg:flex-row items-center min-h-[75vh] py-20 gap-12">
@@ -65,7 +87,7 @@ const Home = () => {
             <div className="flex-1 relative w-full h-[400px] lg:h-[500px] flex items-center justify-center">
                <div className="absolute w-full h-full bg-gradient-to-tr from-gray-300 to-[#F5F5F7] rounded-full blur-3xl opacity-40"></div>
                <img
-                 // Uses the first product image as the hero image, or a fallback
+                 
                  src={featuredProducts[0]?.imageUrl || "https://images.unsplash.com/photo-1593640408182-31c70c8268f5?q=80&w=1000&auto=format&fit=crop"}
                  alt="Hero Gear"
                  className="relative z-10 w-full h-full object-contain drop-shadow-2xl mix-blend-multiply"
@@ -75,30 +97,24 @@ const Home = () => {
         </div>
       </section>
 
-      {/* VALUE PROPOSITION */}
       <section className="border-y border-gray-200 bg-white">
-        <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-16">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-12">
-            <div className="flex flex-col items-center text-center space-y-4">
-              <Globe size={36} strokeWidth={1.5} className="text-black" />
-              <h3 className="font-black uppercase tracking-widest text-sm">Global Shipping</h3>
-              <p className="text-gray-500 text-sm font-medium">Fast and secure delivery to over 100 countries worldwide.</p>
-            </div>
-            <div className="flex flex-col items-center text-center space-y-4">
-              <ShieldCheck size={36} strokeWidth={1.5} className="text-black" />
-              <h3 className="font-black uppercase tracking-widest text-sm">2-Year Warranty</h3>
-              <p className="text-gray-500 text-sm font-medium">Every piece of gear is backed by our comprehensive hardware warranty.</p>
-            </div>
-            <div className="flex flex-col items-center text-center space-y-4">
-              <Zap size={36} strokeWidth={1.5} className="text-black" />
-              <h3 className="font-black uppercase tracking-widest text-sm">Peak Performance</h3>
-              <p className="text-gray-500 text-sm font-medium">Engineered for uncompromising speed, precision, and durability.</p>
-            </div>
+        <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-14">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
+            {PROMISES.map(({ icon: Icon, title, copy }) => (
+              <div key={title} className="flex items-start gap-4">
+                <div className="h-11 w-11 shrink-0 rounded-2xl bg-surface-muted flex items-center justify-center">
+                  <Icon size={20} strokeWidth={1.75} className="text-black" />
+                </div>
+                <div>
+                  <h3 className="font-black uppercase tracking-widest text-[11px] mb-1.5">{title}</h3>
+                  <p className="text-gray-500 text-[13px] font-medium leading-relaxed">{copy}</p>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       </section>
 
-      {/* FEATURED CATEGORIES */}
       {categories.length > 0 && (
         <section className="py-24 bg-white">
           <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8">
@@ -109,32 +125,45 @@ const Home = () => {
                 <ArrowRight size={16} />
               </Link>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div
+              className={`grid gap-6 ${
+                CATEGORY_GRID[categories.length] ?? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-4'
+              }`}
+            >
               {categories.map((cat) => (
-                <div 
-                  key={cat.id} 
-                  // Clicking a category navigates to products page with search param
-                  onClick={() => navigate(`/products?category=${cat.id}`)} 
-                  className="group cursor-pointer relative aspect-square bg-[#F5F5F7] rounded-3xl overflow-hidden flex items-end p-8 border border-gray-100 hover:border-black transition-all"
+                <button
+                  key={cat.id}
+                  type="button"
+                  // Filter by slug so the listing page can show it as selected.
+                  onClick={() => navigate(`/products?category=${cat.slug ?? cat.name}`)}
+                  className="group relative aspect-[4/5] sm:aspect-square bg-black rounded-3xl overflow-hidden text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black focus-visible:ring-offset-2"
                 >
-                  {/* Category Image */}
-                  <img 
-                    src={cat.imageUrl || 'https://images.unsplash.com/photo-1550009158-9ebf69173e03?q=80&w=500&auto=format&fit=crop'} 
-                    className="absolute inset-0 w-full h-full object-cover opacity-60 group-hover:scale-110 transition-transform duration-700 mix-blend-multiply" 
-                    alt={cat.name} 
-                  />
-                  <div className="relative z-10 w-full bg-white/90 backdrop-blur-sm p-4 rounded-xl border border-white/50">
-                    <h3 className="text-lg font-black text-black uppercase truncate">{cat.name}</h3>
-                    <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mt-1">{cat.productCount || 0} Products</p>
+                  <CategoryArt category={cat} />
+
+                  {/* A scrim instead of a washed-out image keeps the photo rich
+                      while the label stays readable on any picture. */}
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/25 to-transparent" />
+
+                  <div className="absolute inset-x-0 bottom-0 p-7 flex items-end justify-between gap-3">
+                    <div className="min-w-0">
+                      <h3 className="text-xl font-black text-white uppercase tracking-tight leading-tight">
+                        {cat.name}
+                      </h3>
+                      <p className="text-[10px] font-bold text-white/70 uppercase tracking-widest mt-1.5">
+                        {cat.productCount ?? 0} {cat.productCount === 1 ? 'Product' : 'Products'}
+                      </p>
+                    </div>
+                    <span className="h-11 w-11 shrink-0 rounded-full bg-white text-black flex items-center justify-center group-hover:bg-brand group-hover:text-white transition-colors">
+                      <ArrowRight size={18} />
+                    </span>
                   </div>
-                </div>
+                </button>
               ))}
             </div>
           </div>
         </section>
       )}
 
-      {/* NEW ARRIVALS */}
       {featuredProducts.length > 0 && (
         <section className="py-24 bg-[#F5F5F7]">
           <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8">
@@ -146,34 +175,54 @@ const Home = () => {
               </Link>
             </div>
             
-            {/* Same bounded card as the Products grid — one card shape across
-                the whole storefront. */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
               {featuredProducts.map((p) => (
-                <div
+                <ProductCard
                   key={p.id}
-                  onClick={() => navigate(`/products/${p.id}`)}
-                  className="group cursor-pointer flex flex-col bg-white border border-gray-200 rounded-3xl overflow-hidden hover:border-gray-400 hover:shadow-lg transition-all"
-                >
-                  <div className="aspect-square bg-surface-muted flex items-center justify-center p-6 overflow-hidden">
-                    <img
-                      src={p.imageUrl || PRODUCT_PLACEHOLDER}
-                      onError={(e) => { e.currentTarget.src = PRODUCT_PLACEHOLDER; }}
-                      className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-700 ease-out"
-                      alt={p.name}
-                    />
-                  </div>
-                  <div className="flex flex-col flex-1 p-5 border-t border-gray-100">
-                    <p className="text-[10px] font-bold text-brand-ink uppercase tracking-[0.15em] mb-1.5">{p.category}</p>
-                    <h3 className="text-base font-bold text-black leading-snug mb-2 truncate">{p.name}</h3>
-                    <p className="text-lg font-black text-black mt-auto pt-2">${Number(p.price).toFixed(2)}</p>
-                  </div>
-                </div>
+                  product={p}
+                  onQuickAdd={quickAdd}
+                  isAdding={addingId === p.id}
+                  isNew={newArrivals.has(p.id)}
+                />
               ))}
             </div>
           </div>
         </section>
       )}
+
+      <section className="bg-black text-white">
+        <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-20 flex flex-col lg:flex-row lg:items-center justify-between gap-10">
+          <div className="max-w-xl">
+            <p className="text-[10px] font-black uppercase tracking-[0.3em] text-white/50 mb-4">
+              Built for the long haul
+            </p>
+            <h2 className="text-4xl sm:text-5xl font-black uppercase tracking-tighter leading-[0.95]">
+              Gear that earns
+              <br />
+              its desk space.
+            </h2>
+            <p className="mt-6 text-white/60 font-medium leading-relaxed">
+              Free shipping over $100, a two-year warranty on everything, and 30 days to change
+              your mind.
+            </p>
+          </div>
+          <div className="flex flex-col sm:flex-row gap-4 shrink-0">
+            <Link
+              to="/products"
+              className="inline-flex items-center justify-center gap-3 bg-white text-black px-8 py-4 rounded-xl font-black uppercase tracking-widest text-xs hover:bg-gray-200 transition-colors"
+            >
+              <span>Shop all gear</span>
+              <ArrowRight size={16} />
+            </Link>
+            <Link
+              to="/contact"
+              className="inline-flex items-center justify-center gap-3 border border-white/25 px-8 py-4 rounded-xl font-black uppercase tracking-widest text-xs hover:bg-white/10 transition-colors"
+            >
+              Talk to us
+            </Link>
+          </div>
+        </div>
+      </section>
     </div>
   );
 };

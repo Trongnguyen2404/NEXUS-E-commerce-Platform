@@ -2,7 +2,7 @@ import { ApiPropertyOptional } from '@nestjs/swagger';
 import { IsEnum, IsOptional, IsString } from 'class-validator';
 import { OrderStatus } from '@/modules/orders/dto/query-order.dto';
 
-// ADMIN only. Never bind this DTO to a route a normal user can reach.
+// Body an admin may send when changing an order's status.
 export class UpdateOrderDto {
   @ApiPropertyOptional({
     description: 'Order status',

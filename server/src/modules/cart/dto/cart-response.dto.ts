@@ -1,9 +1,7 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { CartItemResponseDto } from '@/modules/cart/dto/cart-item-response.dto';
 
-/**
- * DTO for cart response
- */
+// Cart as returned by the API, with its computed totals.
 export class CartResponseDto {
   @ApiProperty({
     description: 'Cart ID',

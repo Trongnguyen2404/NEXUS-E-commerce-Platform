@@ -5,15 +5,14 @@ import axiosClient, { getErrorMessage } from '../api/axiosClient';
 import AddressForm from './AddressForm';
 import type { Address } from '../types/api';
 
+// Props for the address picker.
 interface Props {
-  /**
-   * When set, cards become selectable (checkout). When omitted the list is a
-   * plain address book (account settings).
-   */
+  
   selectedId?: string | null;
   onSelect?: (address: Address) => void;
 }
 
+// Lists saved addresses and lets the user pick, add, edit or delete one.
 const AddressBook = ({ selectedId, onSelect }: Props) => {
   const [addresses, setAddresses] = useState<Address[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -28,7 +27,7 @@ const AddressBook = ({ selectedId, onSelect }: Props) => {
       const list = await axiosClient.get<Address[]>('/addresses');
       setAddresses(list);
 
-      // Preselect the default so checkout is one click for the common case.
+      
       if (isPicker && !selectedId && list.length > 0) {
         onSelect?.(list.find((a) => a.isDefault) ?? list[0]);
       }
@@ -37,8 +36,8 @@ const AddressBook = ({ selectedId, onSelect }: Props) => {
     } finally {
       setIsLoading(false);
     }
-    // `selectedId` is deliberately absent: re-running on every selection change
-    // would refetch the list each time the user picks a different card.
+    
+    
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isPicker, onSelect]);
 
@@ -141,7 +140,6 @@ const AddressBook = ({ selectedId, onSelect }: Props) => {
                 <p className="text-xs font-bold text-gray-400 mt-1.5">{address.phone}</p>
               </div>
 
-              {/* stopPropagation: the whole card is a selection target in picker mode */}
               <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
                 {!address.isDefault && (
                   <button type="button" onClick={() => handleSetDefault(address)}

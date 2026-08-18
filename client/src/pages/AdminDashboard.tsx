@@ -19,6 +19,7 @@ const PERIODS = [
   { days: 90, label: '90 days' },
 ] as const;
 
+// Admin dashboard with revenue, orders and best sellers.
 const AdminDashboard = () => {
   const [days, setDays] = useState<number>(30);
   const [isLoading, setIsLoading] = useState(true);
@@ -63,8 +64,8 @@ const AdminDashboard = () => {
 
   const periodLabel = `previous ${days} days`;
 
-  // Alerts that need action. Only rendered when non-zero, so a healthy shop
-  // shows a clean page instead of a row of green "0"s.
+  
+  
   const plural = (count: number, singular: string, pluralForm = `${singular}s`) =>
     `${count} ${count === 1 ? singular : pluralForm}`;
 
@@ -87,7 +88,6 @@ const AdminDashboard = () => {
     <div className="min-h-screen bg-[#EDEDF0] py-12 px-4 sm:px-8">
       <div className="max-w-[1400px] mx-auto space-y-8">
 
-        {/* Header + period filter, in one row above the charts */}
         <div className="bg-white rounded-[2rem] p-8 sm:p-10 border border-gray-300 flex flex-col sm:flex-row justify-between items-start sm:items-end gap-6">
           <div>
             <h1 className="text-4xl sm:text-5xl font-black uppercase tracking-tighter text-black">Dashboard</h1>
@@ -113,7 +113,6 @@ const AdminDashboard = () => {
           </div>
         </div>
 
-        {/* Hero figure — the one number the page leads with */}
         <div className="bg-white rounded-[2rem] p-8 sm:p-10 border border-gray-300">
           <p className="text-[10px] font-bold uppercase tracking-widest mb-3" style={{ color: chart.textMuted }}>
             Lifetime revenue
@@ -126,7 +125,6 @@ const AdminDashboard = () => {
           </p>
         </div>
 
-        {/* KPI row */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
           <StatTile
             label={`Revenue · last ${days}d`}
@@ -175,7 +173,6 @@ const AdminDashboard = () => {
           </div>
         )}
 
-        {/* Revenue over time */}
         <div className="bg-white rounded-[2rem] p-8 sm:p-10 border border-gray-300">
           <div className="flex items-start justify-between gap-6 mb-8">
             <div>
@@ -200,8 +197,6 @@ const AdminDashboard = () => {
 
           <RevenueAreaChart data={revenue} />
 
-          {/* Table view — the same numbers, for screen readers and anyone who
-              would rather read than hover. */}
           {showTable && (
             <div className="mt-8 max-h-72 overflow-y-auto rounded-2xl border border-gray-200">
               <table className="w-full text-left">

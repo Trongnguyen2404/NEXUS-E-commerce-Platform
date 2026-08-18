@@ -12,19 +12,16 @@ import { SkipThrottle } from '@nestjs/throttler';
 import { ApiExcludeEndpoint, ApiTags } from '@nestjs/swagger';
 import { PaymentsService } from '@/modules/payments/payments.service';
 
-/**
- * Kept separate from PaymentsController because that controller is behind
- * JwtAuthGuard — Stripe has no JWT. Authenticity is proven by the signature
- * header instead, verified in PaymentsService.handleStripeEvent().
- */
+// Receives Stripe webhooks on a raw-body, unauthenticated route.
 @ApiTags('payments')
 @Controller('payments')
 export class StripeWebhookController {
   constructor(private readonly paymentsService: PaymentsService) {}
 
+  // Verifies the Stripe signature and dispatches the event.
   @Post('webhook')
   @HttpCode(HttpStatus.OK)
-  @SkipThrottle() // Stripe batches retries; throttling them would drop events.
+  @SkipThrottle()
   @ApiExcludeEndpoint()
   async handleWebhook(
     @Req() req: RawBodyRequest<Request>,

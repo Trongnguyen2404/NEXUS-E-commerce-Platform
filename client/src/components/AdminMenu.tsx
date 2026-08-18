@@ -1,15 +1,16 @@
 import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuthStore } from '../store/useAuthStore';
-// Thêm MessageSquare vào đây
+
 import { Shield, Package, Layers, X, ShoppingCart, Users, MessageSquare, LayoutDashboard, Tag } from 'lucide-react';
 
+// Floating quick-jump menu, rendered only for admins.
 const AdminMenu = () => {
   const { user } = useAuthStore();
   const [isOpen, setIsOpen] = useState(false);
   const location = useLocation();
 
-  // BẢO MẬT: Không phải ADMIN thì KHÔNG render (ẩn hoàn toàn)
+  
   if (user?.role !== 'ADMIN') return null;
 
   const menuItems = [
@@ -19,12 +20,11 @@ const AdminMenu = () => {
     { path: '/admin/orders', label: 'Orders', icon: ShoppingCart },
     { path: '/admin/users', label: 'Users', icon: Users },
     { path: '/admin/contacts', label: 'Contacts', icon: MessageSquare },
-    { path: '/admin/coupons', label: 'Promo codes', icon: Tag }, // MỤC MỚI ĐÂY NÈ!
+    { path: '/admin/coupons', label: 'Promo codes', icon: Tag }, 
   ];
 
   return (
     <div className="fixed bottom-6 left-6 z-[100]">
-      {/* Khối Menu sổ lên */}
       {isOpen && (
         <div className="bg-white p-4 rounded-3xl mb-4 shadow-2xl border border-gray-200 flex flex-col gap-2 w-56 animate-in slide-in-from-bottom-4 duration-200">
           <div className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2 px-3 pt-2 border-b border-gray-50 pb-2">
@@ -49,15 +49,18 @@ const AdminMenu = () => {
         </div>
       )}
 
-      {/* Nút Kích Hoạt */}
-      <button 
+      <button
         onClick={() => setIsOpen(!isOpen)}
-        className={`flex items-center gap-3 px-6 py-4 rounded-full font-black uppercase text-xs tracking-widest shadow-2xl transition-all ${
-          isOpen ? 'bg-red-500 text-white shadow-red-500/30' : 'bg-black text-white hover:scale-105 shadow-black/30'
+        aria-label={isOpen ? 'Close admin menu' : 'Open admin menu'}
+        aria-expanded={isOpen}
+        title={isOpen ? 'Close admin menu' : 'Admin menu'}
+        className={`h-14 w-14 flex items-center justify-center rounded-full shadow-2xl transition-all ${
+          isOpen
+            ? 'bg-state-danger text-white shadow-state-danger/30'
+            : 'bg-black text-white hover:scale-105 shadow-black/30'
         }`}
       >
         {isOpen ? <X size={20} /> : <Shield size={20} />}
-        {!isOpen && <span>Admin Menu</span>}
       </button>
     </div>
   );

@@ -8,6 +8,7 @@ import {
   MaxLength,
 } from 'class-validator';
 
+// Body accepted when saving a new shipping address.
 export class CreateAddressDto {
   @ApiProperty({ example: 'Nguyen Van A' })
   @IsString()
@@ -18,8 +19,6 @@ export class CreateAddressDto {
   @ApiProperty({ example: '0901234567' })
   @IsString()
   @IsNotEmpty({ message: 'Phone number is required' })
-  // Deliberately loose: this ships internationally, and a strict national
-  // pattern would reject valid numbers.
   @Matches(/^[+\d][\d\s().-]{5,19}$/, {
     message: 'Please provide a valid phone number',
   })
@@ -69,8 +68,10 @@ export class CreateAddressDto {
   isDefault?: boolean;
 }
 
+// Body accepted when editing an address; every field optional.
 export class UpdateAddressDto extends PartialType(CreateAddressDto) {}
 
+// Address as returned by the API.
 export class AddressResponseDto {
   @ApiProperty() id: string;
   @ApiProperty() fullName: string;

@@ -14,12 +14,11 @@ import {
   Min,
 } from 'class-validator';
 
+// Body for creating a promo code.
 export class CreateCouponDto {
   @ApiProperty({ example: 'WELCOME10' })
   @IsString()
   @IsNotEmpty({ message: 'Code is required' })
-  // Codes are typed by customers, so keep them unambiguous and case-insensitive
-  // (the service uppercases before lookup).
   @Matches(/^[A-Za-z0-9_-]{3,32}$/, {
     message:
       'Code must be 3–32 characters, letters/numbers/dash/underscore only',
@@ -64,15 +63,16 @@ export class CreateCouponDto {
   @Min(1)
   maxUses?: number;
 
-  @ApiPropertyOptional({ example: '2026-09-01T00:00:00.000Z' })
+  // Null is a meaningful value here, not an omission: it clears the window.
+  @ApiPropertyOptional({ example: '2026-09-01T00:00:00.000Z', nullable: true })
   @IsOptional()
   @IsDateString({}, { message: 'startsAt must be an ISO date' })
-  startsAt?: string;
+  startsAt?: string | null;
 
-  @ApiPropertyOptional({ example: '2026-12-31T23:59:59.000Z' })
+  @ApiPropertyOptional({ example: '2026-12-31T23:59:59.000Z', nullable: true })
   @IsOptional()
   @IsDateString({}, { message: 'expiresAt must be an ISO date' })
-  expiresAt?: string;
+  expiresAt?: string | null;
 
   @ApiPropertyOptional({ default: true })
   @IsOptional()
@@ -80,8 +80,10 @@ export class CreateCouponDto {
   isActive?: boolean;
 }
 
+// Body for editing a promo code; every field optional.
 export class UpdateCouponDto extends PartialType(CreateCouponDto) {}
 
+// Promo code as returned by the API.
 export class CouponResponseDto {
   @ApiProperty() id: string;
   @ApiProperty() code: string;

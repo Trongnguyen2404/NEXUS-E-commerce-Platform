@@ -1,12 +1,4 @@
-/**
- * Email bodies. Kept as plain template strings rather than a templating engine
- * so nothing extra has to be copied into the Docker image at build time.
- *
- * Every message ships both HTML and a text fallback — a text/plain part is what
- * keeps a transactional email out of the spam folder.
- */
-
-/** Escapes user-supplied values. Product names and addresses are user input. */
+// Escapes user supplied text before it goes into email HTML.
 const esc = (value: string): string =>
   value
     .replace(/&/g, '&amp;')
@@ -14,8 +6,10 @@ const esc = (value: string): string =>
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');
 
+// Formats a number as a dollar amount.
 const money = (amount: number) => `$${Number(amount).toFixed(2)}`;
 
+// Wraps body HTML in the shared email shell.
 const layout = (heading: string, body: string) => `
 <!doctype html>
 <html>
@@ -49,11 +43,13 @@ const layout = (heading: string, body: string) => `
   </body>
 </html>`;
 
+// Renders a call to action button.
 const button = (href: string, label: string) => `
   <a href="${href}" style="display:inline-block;background:#000;color:#fff;text-decoration:none;padding:15px 30px;border-radius:14px;font-size:13px;font-weight:800;letter-spacing:1.2px;text-transform:uppercase;">
     ${label}
   </a>`;
 
+// Builds the password reset email.
 export const passwordResetEmail = (
   resetUrl: string,
   expiryMinutes: number,
@@ -84,12 +80,13 @@ export const passwordResetEmail = (
 
 interface OrderEmailItem {
   productName: string;
-  /** e.g. "M / Black". Null for products without variants. */
+
   variantLabel?: string | null;
   quantity: number;
   price: number;
 }
 
+// Builds the order confirmation email.
 export const orderConfirmationEmail = (order: {
   orderNumber: string;
   items: OrderEmailItem[];
@@ -151,6 +148,7 @@ export const orderConfirmationEmail = (order: {
   };
 };
 
+// Builds the refund issued email.
 export const refundIssuedEmail = (refund: {
   orderNumber: string;
   amount: number;
@@ -204,6 +202,7 @@ const STATUS_COPY: Record<string, { heading: string; body: string }> = {
   },
 };
 
+// Builds the order status change email.
 export const orderStatusEmail = (order: {
   orderNumber: string;
   status: string;

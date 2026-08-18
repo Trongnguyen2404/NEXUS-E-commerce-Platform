@@ -8,6 +8,7 @@ import {
   Param,
   Patch,
   Post,
+  Put,
   Query,
   UseGuards,
 } from '@nestjs/common';
@@ -22,18 +23,22 @@ import { ProductsService } from '@/modules/products/products.service';
 import { JwtAuthGuard } from '@/common/guards/jwt-auth.guard';
 import { RolesGuard } from '@/common/guards/roles.guard';
 import { Roles } from '@/common/decorators/roles.decorator';
+import { GetUser } from '@/common/decorators/get-user.decorator';
+import { OptionalJwtAuthGuard } from '@/modules/products/guards/optional-jwt-auth.guard';
 import { Role } from '@prisma/client';
 import { CreateProductDto } from '@/modules/products/dto/create-product.dto';
 import { ProductResponseDto } from '@/modules/products/dto/product-response.dto';
 import { QueryProductDto } from '@/modules/products/dto/query-product.dto';
 import { UpdateProductDto } from '@/modules/products/dto/update-product.dto';
+import { SetProductImagesDto } from '@/modules/products/dto/product-images.dto';
 
+// Product endpoints: public reads, admin-only writes.
 @ApiTags('products')
 @Controller('products')
 export class ProductsController {
   constructor(private readonly productsService: ProductsService) {}
 
-  // Create
+  // Creates a product; admin only.
   @Post()
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.ADMIN)
@@ -63,10 +68,14 @@ export class ProductsController {
     return await this.productsService.create(createProductDto);
   }
 
-  // Get all products
+  // Lists products with search, filters, sorting and paging.
   @Get()
+  @UseGuards(OptionalJwtAuthGuard)
   @ApiOperation({
     summary: 'Get all products with optional filters',
+    description:
+      'Public. Only an admin token may pass isActive=false; for everyone ' +
+      'else the listing is limited to active products.',
   })
   @ApiResponse({
     status: 200,
@@ -91,11 +100,17 @@ export class ProductsController {
       },
     },
   })
-  async findAll(@Query() queryDto: QueryProductDto) {
-    return await this.productsService.findAll(queryDto);
+  async findAll(
+    @Query() queryDto: QueryProductDto,
+    @GetUser() user?: { role?: Role },
+  ) {
+    return await this.productsService.findAll(
+      queryDto,
+      user?.role === Role.ADMIN,
+    );
   }
 
-  //Get product by id
+  // Returns one product with its variants and rating.
   @Get(':id')
   @ApiOperation({
     summary: ' Get product by id',
@@ -113,7 +128,7 @@ export class ProductsController {
     return await this.productsService.findOne(id);
   }
 
-  // Update a product
+  // Edits a product; admin only.
   @Patch(':id')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.ADMIN)
@@ -144,7 +159,34 @@ export class ProductsController {
     return await this.productsService.update(id, updateProductDto);
   }
 
-  // Update product stock
+  // Replaces a product's image list; admin only.
+  @Put(':id/images')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({
+    summary: 'Replace the image gallery (Admin Only)',
+    description:
+      'Send every image URL in display order; the first becomes the cover. ' +
+      'This replaces the gallery outright, so it covers adding, removing and ' +
+      'reordering in one idempotent call. Upload the files first via ' +
+      'POST /admin/uploads/image.',
+  })
+  @ApiBody({ type: SetProductImagesDto })
+  @ApiResponse({
+    status: 200,
+    description: 'Gallery replaced',
+    type: ProductResponseDto,
+  })
+  @ApiResponse({ status: 404, description: 'Product not found' })
+  async setImages(
+    @Param('id') id: string,
+    @Body() dto: SetProductImagesDto,
+  ): Promise<ProductResponseDto> {
+    return await this.productsService.setImages(id, dto.urls);
+  }
+
+  // Adjusts a product's stock; admin only.
   @Patch(':id/stock')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.ADMIN)
@@ -186,7 +228,7 @@ export class ProductsController {
     return await this.productsService.updateStock(id, quantity);
   }
 
-  // Remove a product
+  // Deletes a product; admin only.
   @Delete(':id')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.ADMIN)

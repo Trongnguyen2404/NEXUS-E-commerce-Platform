@@ -10,10 +10,12 @@ import {
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 
+// Stores and manages contact form submissions.
 @Injectable()
 export class ContactsService {
   constructor(private prisma: PrismaService) {}
 
+  // Saves a new contact message.
   async create(
     createContactDto: CreateContactDto,
   ): Promise<ContactResponseDto> {
@@ -35,6 +37,7 @@ export class ContactsService {
     }
   }
 
+  // Lists messages with paging, search and status filtering.
   async findAll(queryDto: QueryContactsDto): Promise<{
     data: ContactResponseDto[];
     meta: {
@@ -86,6 +89,7 @@ export class ContactsService {
     };
   }
 
+  // Loads one message by id.
   async findOne(id: string): Promise<ContactResponseDto> {
     const contact = await this.prisma.contact.findUnique({
       where: { id },
@@ -106,6 +110,7 @@ export class ContactsService {
     return contact;
   }
 
+  // Updates a message's status or admin notes.
   async update(
     id: string,
     updateContactDto: UpdateContactDto,
@@ -136,6 +141,7 @@ export class ContactsService {
     };
   }
 
+  // Deletes a message.
   async remove(id: string): Promise<{ message: string }> {
     const contact = await this.prisma.contact.findUnique({
       where: { id },

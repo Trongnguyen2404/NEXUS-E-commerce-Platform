@@ -1,5 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 
+// Category as returned by the API.
 export class CategoryResponseDto {
   @ApiProperty({
     example: '550e484-ere8458454-45erer4844858',

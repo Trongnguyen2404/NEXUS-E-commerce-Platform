@@ -7,6 +7,7 @@ import {
   MaxLength,
 } from 'class-validator';
 
+// Body for creating a category.
 export class CreateCategoryDto {
   @ApiProperty({
     example: 'Electronics',

@@ -1,7 +1,7 @@
-//Dto
 import { ApiProperty } from '@nestjs/swagger';
 import { Role } from '@prisma/client';
 
+// User as returned by the API, without the password.
 export class UserResponseDto {
   @ApiProperty({
     description: 'User ID',

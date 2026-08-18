@@ -1,13 +1,9 @@
-/**
- * Shapes returned by the API, mirroring the server's response DTOs.
- *
- * Dates arrive as ISO strings over JSON even though the server types them as
- * `Date`, so they are `string` here — typing them as `Date` would compile but
- * then `.toLocaleDateString()` would blow up at runtime.
- */
 
+
+// Account role.
 export type Role = 'USER' | 'ADMIN';
 
+// Where an order sits in its lifecycle.
 export type OrderStatus =
   | 'PENDING'
   | 'PROCESSING'
@@ -15,10 +11,13 @@ export type OrderStatus =
   | 'DELIVERED'
   | 'CANCELLED';
 
+// Where a payment sits in its lifecycle.
 export type PaymentStatus = 'PENDING' | 'COMPLETED' | 'FAILED' | 'REFUNDED';
 
+// Where a contact message sits in the admin inbox.
 export type ContactStatus = 'PENDING' | 'READ' | 'REPLIED';
 
+// A user account.
 export interface User {
   id: string;
   email: string;
@@ -29,51 +28,57 @@ export interface User {
   updatedAt: string;
 }
 
-/** POST /auth/login and /auth/register. The refresh token is a cookie, not a field. */
+// What the login and register endpoints return.
 export interface AuthResponse {
   accessToken: string;
   user: Pick<User, 'id' | 'email' | 'firstName' | 'lastName' | 'role'>;
 }
 
+// One buyable option of a product, with its own price and stock.
 export interface ProductVariant {
   id: string;
   productId: string;
   sku: string;
-  /** e.g. { Size: "M", Color: "Black" } */
+
   options: Record<string, string>;
-  /** Rendered options, e.g. "M / Black". */
+
   label: string;
-  /** Effective price — the variant's own, or the product's when it has none. */
+
   price: number;
   stock: number;
   imageUrl: string | null;
   isActive: boolean;
 }
 
+// A catalogue product with its images, variants and rating.
 export interface Product {
   id: string;
   name: string;
   description: string | null;
-  /** For a variant product this is the CHEAPEST option ("from $X"). */
+
   price: number;
-  /** For a variant product this is the total across active variants. */
+
   stock: number;
-  /** When true, buying requires choosing a variant. */
+
   hasVariants: boolean;
   variants: ProductVariant[];
   sku: string;
+
   imageUrl: string | null;
-  /** The category NAME, flattened by the server — not an id. */
+
+  images: string[];
+
   category: string | null;
   categoryId: string;
   isActive: boolean;
-  /** Mean review score; 0 when nobody has reviewed it yet. */
+
   rating: number;
   reviewCount: number;
   createdAt: string;
   updatedAt: string;
 }
 
+// A store category.
 export interface Category {
   id: string;
   name: string;
@@ -86,16 +91,17 @@ export interface Category {
   updatedAt: string;
 }
 
+// One line in the cart, with the variant and price it was added at.
 export interface CartItem {
   id: string;
   cartId: string;
   productId: string;
   variantId: string | null;
-  /** e.g. "M / Black"; null for products without variants. */
+
   variantLabel: string | null;
-  /** What this line costs per unit — variant price when there is one. */
+
   unitPrice: number;
-  /** Stock left for this exact line, variant-aware. */
+
   availableStock: number;
   quantity: number;
   product: Product;
@@ -103,6 +109,7 @@ export interface CartItem {
   updatedAt: string;
 }
 
+// The cart with its lines and computed totals.
 export interface Cart {
   id: string;
   userId: string;
@@ -113,11 +120,12 @@ export interface Cart {
   updatedAt: string;
 }
 
+// One line of a placed order, priced at the time of purchase.
 export interface OrderItem {
   id: string;
   productId: string;
   productName: string;
-  /** Snapshot of the variant as it read at purchase time. */
+
   variantLabel: string | null;
   quantity: number;
   price: number;
@@ -126,28 +134,30 @@ export interface OrderItem {
   updatedAt: string;
 }
 
+// A placed order.
 export interface Order {
   id: string;
   orderNumber: string;
   userId: string;
   status: OrderStatus;
-  /** Goods before discount, shipping and tax. */
+
   subtotal: number;
   discountAmount: number;
   shippingFee: number;
   taxAmount: number;
   couponCode: string | null;
-  /** subtotal - discount + shipping + tax */
+
   total: number;
   shippingAddress: string;
   items: OrderItem[];
-  /** Only present on admin endpoints, which include the related user. */
+
   userEmail?: string;
   userName?: string;
   createdAt: string;
   updatedAt: string;
 }
 
+// A Stripe payment against an order.
 export interface Payment {
   id: string;
   orderId: string;
@@ -161,6 +171,7 @@ export interface Payment {
   updatedAt: string;
 }
 
+// One product review.
 export interface Review {
   id: string;
   rating: number;
@@ -169,19 +180,21 @@ export interface Review {
   isVerifiedPurchase: boolean;
   productId: string;
   userId: string;
-  /** "John D." — the server never publishes the reviewer's email. */
+
   authorName: string;
   createdAt: string;
   updatedAt: string;
 }
 
+// A product's average rating and star distribution.
 export interface ReviewSummary {
   average: number;
   total: number;
-  /** Keys 1–5 mapped to how many reviews gave that many stars. */
+
   distribution: Record<number, number>;
 }
 
+// A page of reviews plus the product's rating summary.
 export interface PaginatedReviews {
   data: Review[];
   summary: ReviewSummary;
@@ -191,12 +204,13 @@ export interface PaginatedReviews {
   totalPages: number;
 }
 
-/** POST/DELETE /wishlist/:productId and its toggle variant. */
+// What the wishlist toggle returns: the resulting saved state.
 export interface WishlistToggleResponse {
   message: string;
   inWishlist: boolean;
 }
 
+// A contact form submission.
 export interface Contact {
   id: string;
   name: string;
@@ -208,9 +222,7 @@ export interface Contact {
   updatedAt?: string;
 }
 
-/* --- envelopes ----------------------------------------------------------- */
-
-/** Products: `{ data, meta }`. */
+// A page of records with full paging metadata.
 export interface PaginatedResponse<T> {
   data: T[];
   meta: {
@@ -218,15 +230,12 @@ export interface PaginatedResponse<T> {
     page: number;
     limit: number;
     totalPages: number;
-    /**
-     * Only sent by /products. Bounds ignore the active price filter, so a range
-     * input keeps stable hints instead of collapsing as the user narrows it.
-     */
+
     priceRange?: { min: number; max: number };
   };
 }
 
-/** Orders and contacts: pagination fields sit at the top level instead. */
+// A simpler list response carrying only a total.
 export interface PageResponse<T> {
   data: T[];
   total: number;
@@ -234,15 +243,14 @@ export interface PageResponse<T> {
   limit: number;
 }
 
-/** Orders and payments wrap single results in `{ success, data, message }`. */
+// A single record wrapped with a message.
 export interface ApiEnvelope<T> {
   success: boolean;
   data: T;
   message: string;
 }
 
-/* --- checkout ------------------------------------------------------------ */
-
+// A saved shipping address.
 export interface Address {
   id: string;
   fullName: string;
@@ -254,12 +262,13 @@ export interface Address {
   postalCode: string;
   country: string;
   isDefault: boolean;
-  /** Single-line rendering, the same string stored on an order. */
+
   formatted: string;
   createdAt: string;
   updatedAt: string;
 }
 
+// The address fields the client may send, without server-owned ones.
 export type AddressInput = Omit<
   Address,
   'id' | 'formatted' | 'createdAt' | 'updatedAt' | 'line2' | 'state' | 'country'
@@ -269,8 +278,10 @@ export type AddressInput = Omit<
   country?: string;
 };
 
+// Whether a promo code takes a percentage or a flat amount off.
 export type DiscountType = 'PERCENT' | 'FIXED';
 
+// A promo code and the limits on its use.
 export interface Coupon {
   id: string;
   code: string;
@@ -287,6 +298,7 @@ export interface Coupon {
   updatedAt: string;
 }
 
+// One priced line of a quote.
 export interface QuoteLine {
   productId: string;
   productName: string;
@@ -295,7 +307,7 @@ export interface QuoteLine {
   lineTotal: number;
 }
 
-/** POST /orders/quote — the same arithmetic the real order will use. */
+// A priced basket: discount, shipping, tax and total.
 export interface Quote {
   items: QuoteLine[];
   subtotal: number;
@@ -309,22 +321,22 @@ export interface Quote {
   } | null;
   shippingFee: number;
   freeShippingThreshold: number;
-  /** How much more the basket needs for free shipping; 0 once it qualifies. */
+
   amountToFreeShipping: number;
   taxRate: number;
   taxAmount: number;
   total: number;
 }
 
-/* --- admin dashboard --------------------------------------------------- */
-
+// One dashboard number with its change on the previous period.
 export interface Metric {
   current: number;
   previous: number;
-  /** Null when the previous period was zero — growth from nothing is undefined. */
+
   changePercent: number | null;
 }
 
+// The dashboard's headline metrics.
 export interface DashboardOverview {
   periodDays: number;
   revenue: Metric;
@@ -338,13 +350,14 @@ export interface DashboardOverview {
   unreadContacts: number;
 }
 
+// One point on the revenue chart.
 export interface RevenuePoint {
-  /** ISO date, UTC. */
   date: string;
   revenue: number;
   orders: number;
 }
 
+// One row of the best sellers table.
 export interface TopProduct {
   productId: string;
   name: string;
@@ -353,15 +366,16 @@ export interface TopProduct {
   revenue: number;
 }
 
+// Order count for a single status.
 export interface StatusBreakdown {
   status: string;
   count: number;
 }
 
-/** Body of a 4xx/5xx from AllExceptionsFilter, as rejected by axiosClient. */
+// The error shape the API returns.
 export interface ApiError {
   statusCode: number;
-  /** class-validator returns an array; a plain throw returns a string. */
+
   message: string | string[];
   path?: string;
   timestamp?: string;

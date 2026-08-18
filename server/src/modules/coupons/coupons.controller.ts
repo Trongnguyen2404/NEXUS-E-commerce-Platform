@@ -33,11 +33,7 @@ import {
   RelaxedThrottle,
 } from '@/common/decorators/custom-throttler.decorator';
 
-/**
- * Admin-only. Customers never list coupons — they type a code at checkout and
- * the pricing service validates it. Exposing the catalogue would hand out every
- * unused promo code.
- */
+// Admin-only promo code management.
 @ApiTags('coupons')
 @ApiBearerAuth('JWT-auth')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -46,6 +42,7 @@ import {
 export class CouponsController {
   constructor(private readonly couponsService: CouponsService) {}
 
+  // Lists every promo code.
   @Get()
   @RelaxedThrottle()
   @ApiOperation({ summary: '[ADMIN] List all coupons' })
@@ -54,6 +51,7 @@ export class CouponsController {
     return await this.couponsService.findAll();
   }
 
+  // Creates a promo code.
   @Post()
   @ModerateThrottle()
   @ApiOperation({ summary: '[ADMIN] Create a coupon' })
@@ -63,6 +61,7 @@ export class CouponsController {
     return await this.couponsService.create(dto);
   }
 
+  // Edits a promo code.
   @Patch(':id')
   @ModerateThrottle()
   @ApiOperation({ summary: '[ADMIN] Update a coupon' })
@@ -73,6 +72,7 @@ export class CouponsController {
     return await this.couponsService.update(id, dto);
   }
 
+  // Deletes a promo code.
   @Delete(':id')
   @ModerateThrottle()
   @ApiOperation({

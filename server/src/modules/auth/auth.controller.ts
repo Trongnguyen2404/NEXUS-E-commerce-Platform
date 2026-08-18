@@ -24,11 +24,12 @@ import {
   refreshTokenCookieOptions,
 } from '@/modules/auth/auth.constants';
 
+// Registration, login, token refresh and password recovery endpoints.
 @Controller('auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
-  // Moves the refresh token out of the response body and into an httpOnly cookie.
+  // Writes the refresh token to an httpOnly cookie.
   private issueRefreshCookie(
     res: Response,
     result: {
@@ -42,7 +43,7 @@ export class AuthController {
     return body;
   }
 
-  //   Register api
+  // Creates an account and signs the new user straight in.
   @Post('register')
   @HttpCode(201)
   @StrictThrottle()
@@ -78,7 +79,7 @@ export class AuthController {
     );
   }
 
-  // Refresh access token
+  // Swaps a valid refresh cookie for a fresh token pair.
   @Post('refresh')
   @HttpCode(HttpStatus.OK)
   @StrictThrottle()
@@ -111,7 +112,7 @@ export class AuthController {
     );
   }
 
-  // Request a password reset link
+  // Emails a reset link, answering the same way whether or not the account exists.
   @Post('forgot-password')
   @HttpCode(HttpStatus.OK)
   @StrictThrottle()
@@ -134,7 +135,7 @@ export class AuthController {
     return await this.authService.forgotPassword(forgotPasswordDto.email);
   }
 
-  // Complete a password reset
+  // Sets a new password from a valid reset token.
   @Post('reset-password')
   @HttpCode(HttpStatus.OK)
   @StrictThrottle()
@@ -164,14 +165,12 @@ export class AuthController {
       resetPasswordDto.newPassword,
     );
 
-    // The stored refresh token was just cleared, so the cookie on this device
-    // is dead too — drop it rather than leaving a stale one behind.
     res.clearCookie(REFRESH_TOKEN_COOKIE, refreshTokenCookieOptions());
 
     return result;
   }
 
-  // Logout user and invalidate refresh token
+  // Clears the refresh cookie and revokes the stored token.
   @Post('logout')
   @HttpCode(HttpStatus.OK)
   @UseGuards(JwtAuthGuard)
@@ -202,7 +201,7 @@ export class AuthController {
     return { message: 'Successfully logged out' };
   }
 
-  // Login
+  // Signs an existing user in.
   @Post('login')
   @HttpCode(HttpStatus.OK)
   @StrictThrottle()
