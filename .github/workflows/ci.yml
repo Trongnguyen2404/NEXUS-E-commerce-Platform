@@ -64,6 +64,9 @@ jobs:
 
       - run: npx eslint "{src,apps,libs,test}/**/*.ts"
 
+      - name: Unit tests
+        run: npm test -- --ci --runInBand
+
       - run: npm run build
 
       - name: Boot the compiled app and hit /health
@@ -102,6 +105,9 @@ jobs:
       - run: npm ci
 
       - run: npm run lint
+
+      - name: Unit tests
+        run: npm test
 
       # `tsc -b && vite build` — catches unused imports and type errors too.
       - run: npm run build

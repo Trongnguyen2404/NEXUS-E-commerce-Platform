@@ -1,18 +1,19 @@
-import { Test, TestingModule } from '@nestjs/testing';
+import { TestingModule } from '@nestjs/testing';
 import { CategoryController } from '@/modules/category/category.controller';
+import { createTestModule } from '../../common/testing/create-test-module';
 
 describe('CategoryController', () => {
   let controller: CategoryController;
 
   beforeEach(async () => {
-    const module: TestingModule = await Test.createTestingModule({
-      controllers: [CategoryController],
-    }).compile();
-
+    const module: TestingModule = await createTestModule(
+      CategoryController,
+      'controller',
+    );
     controller = module.get<CategoryController>(CategoryController);
   });
 
-  it('should be defined', () => {
+  it('is constructed with its dependencies resolved', () => {
     expect(controller).toBeDefined();
   });
 });
