@@ -1,0 +1,11 @@
+User-agent: *
+Allow: /
+
+# Nothing here is useful to a crawler and some of it is private.
+Disallow: /admin
+Disallow: /account
+Disallow: /cart
+Disallow: /checkout
+Disallow: /wishlist
+Disallow: /reset-password
+Disallow: /forgot-password
