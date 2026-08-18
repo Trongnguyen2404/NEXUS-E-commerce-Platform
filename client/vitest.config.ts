@@ -9,6 +9,13 @@ export default defineConfig({
     globals: true,
     setupFiles: ['./src/test/setup.ts'],
     include: ['src/**/*.{test,spec}.{ts,tsx}'],
+    // The page-level tests drive several awaited round trips and mount Stripe
+    // Elements. Each file also stands up its own jsdom, and with a dozen of
+    // them competing that setup alone dominates the run — measured at ~200s of
+    // environment time for a 60s wall clock. The 5s default then times out at
+    // random, which reads as a flaky product bug when it is only machine load.
+    testTimeout: 20_000,
+    hookTimeout: 20_000,
     coverage: {
       provider: 'v8',
       include: ['src/**/*.{ts,tsx}'],

@@ -1,0 +1,64 @@
+name: Keep the API warm
+
+# The API runs on an instance that spins down after 15 minutes without inbound
+# traffic and then takes about a minute to answer again. This pokes it during
+# the hours shoppers are actually around.
+#
+# It calls /health/live on purpose — that route does not query the database.
+# /health and /health/ready both do, and holding a free Postgres compute open
+# all day would exhaust its monthly allowance long before the month ended.
+#
+# Two honest caveats:
+#   * GitHub's scheduled runs are best-effort and can slip well past their slot
+#     under load, so an occasional 15-minute gap will let the service sleep. A
+#     dedicated uptime pinger is more punctual if that starts to matter.
+#   * GitHub disables scheduled workflows after 60 days with no repo activity.
+
+on:
+  schedule:
+    # Every 10 minutes from 00:00 to 16:50 UTC — 07:00 to 23:50 in UTC+7.
+    # About 510 running hours a month, comfortably inside the 750 the free
+    # tier grants a workspace per calendar month.
+    - cron: '*/10 0-16 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: keep-api-warm
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  ping:
+    name: Ping the liveness route
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+
+    steps:
+      - name: Wake the API
+        env:
+          # Public URL, nothing secret. Override with a repository variable if
+          # the service is ever renamed.
+          API_BASE: ${{ vars.API_BASE_URL || 'https://nexus-e-commerce-platform.onrender.com' }}
+        run: |
+          set -uo pipefail
+          url="$API_BASE/api/v1/health/live"
+
+          for attempt in 1 2 3; do
+            # A cold instance holds the connection while it boots, so allow
+            # well over the usual one-minute spin-up before giving up.
+            code=$(curl -sS -o /tmp/body.txt -w '%{http_code}' \
+                     --max-time 120 "$url" || echo 000)
+            echo "attempt $attempt -> HTTP $code"
+
+            if [ "$code" = "200" ]; then
+              echo "awake: $(cat /tmp/body.txt)"
+              exit 0
+            fi
+
+            [ "$attempt" -lt 3 ] && sleep 20
+          done
+
+          echo "::error::$url never returned 200 after three attempts"
+          exit 1

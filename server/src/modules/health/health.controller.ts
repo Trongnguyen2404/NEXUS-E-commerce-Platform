@@ -39,6 +39,26 @@ export class HealthController {
     return this.check();
   }
 
+  // Says the process is up, deliberately without touching the database.
+  //
+  // This is the route the keep-alive pinger calls. /health and /health/ready
+  // both run a query, and on a free Neon plan that would hold the compute open
+  // around the clock — the plan allows about 400 running hours a month against
+  // a ~730-hour month, so pinging those would suspend the database mid-month.
+  // Keeping the web service warm and letting the database sleep is the point:
+  // Neon wakes in a few hundred milliseconds, the web service takes a minute.
+  @Get('live')
+  @SkipThrottle()
+  @ApiOperation({ summary: 'Liveness only — does not query the database' })
+  @ApiResponse({ status: 200, description: 'Process is running' })
+  live() {
+    return {
+      status: 'ok',
+      uptimeSeconds: Math.floor(process.uptime()),
+      timestamp: new Date().toISOString(),
+    };
+  }
+
   // Builds the health response body.
   private payload(status: string, database: string, latencyMs: number) {
     return {

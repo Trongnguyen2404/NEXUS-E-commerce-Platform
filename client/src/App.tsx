@@ -25,6 +25,7 @@ import { useWishlistStore } from './store/useWishlistStore';
 import ProtectedRoute from './components/ProtectedRoute';
 import ErrorBoundary from './components/ErrorBoundary';
 import ScrollToTop from './components/ScrollToTop';
+import ColdStartNotice from './components/ColdStartNotice';
 import Footer from './components/Footer';
 
 // Checkout drags in the whole Stripe SDK and the admin area is seven screens
@@ -179,6 +180,7 @@ function App() {
       <ErrorBoundary>
         <ScrollToTop />
         <div className="min-h-screen bg-white font-sans text-black selection:bg-brand-soft flex flex-col">
+          <ColdStartNotice />
           <Navbar />
           <main className="flex-1">
             <Suspense fallback={<RouteFallback />}>
