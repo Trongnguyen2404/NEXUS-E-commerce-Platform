@@ -1,6 +1,8 @@
-import { Controller, Get, Header } from '@nestjs/common';
+import { Controller, Get, Header, Logger, OnModuleInit } from '@nestjs/common';
 import { ApiExcludeController } from '@nestjs/swagger';
 import { PrismaService } from '@/prisma/prisma.service';
+
+const DEV_SITE_URL = 'http://localhost:5173';
 
 // Escapes the five characters that are not legal as-is in XML text.
 const xml = (value: string): string =>
@@ -14,14 +16,30 @@ const xml = (value: string): string =>
 // Serves a sitemap built from what is actually in the catalogue right now.
 @ApiExcludeController()
 @Controller()
-export class SeoController {
+export class SeoController implements OnModuleInit {
+  private readonly logger = new Logger(SeoController.name);
+
   constructor(private readonly prisma: PrismaService) {}
 
+  // Says so at boot when the sitemap would advertise localhost.
+  //
+  // Forgetting PUBLIC_SITE_URL fails silently in the worst way: the deploy is
+  // green, /sitemap.xml answers 200, and every URL inside it points at a
+  // machine only the developer can reach. Nothing surfaces that until someone
+  // wonders why the store never appears in search.
+  onModuleInit(): void {
+    if (process.env.PUBLIC_SITE_URL) return;
+
+    const message =
+      `PUBLIC_SITE_URL is not set, so the sitemap and robots.txt will point at ` +
+      `${DEV_SITE_URL}. Set it to the public storefront origin.`;
+
+    if (process.env.NODE_ENV === 'production') this.logger.error(message);
+    else this.logger.warn(message);
+  }
+
   private get site(): string {
-    return (process.env.PUBLIC_SITE_URL ?? 'http://localhost:5173').replace(
-      /\/$/,
-      '',
-    );
+    return (process.env.PUBLIC_SITE_URL ?? DEV_SITE_URL).replace(/\/$/, '');
   }
 
   // Lists the storefront routes plus every live product and category.
