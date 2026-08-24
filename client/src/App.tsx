@@ -221,7 +221,16 @@ function App() {
           <Footer />
         </div>
       </ErrorBoundary>
-      <ToastContainer position="bottom-right" autoClose={3000} hideProgressBar theme="dark" />
+      {/* Light theme: the card styling lives in index.css and matches the
+          storefront. 4s rather than 3s — an error needs longer to read. */}
+      <ToastContainer
+        position="bottom-right"
+        autoClose={4000}
+        hideProgressBar
+        theme="light"
+        newestOnTop
+        closeOnClick
+      />
       <AdminMenu />
     </BrowserRouter>
   );
