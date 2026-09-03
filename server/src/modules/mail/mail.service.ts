@@ -12,9 +12,16 @@ export class MailService implements OnModuleInit {
 
   private isPreviewMode = false;
 
-  // Builds the transporter once at boot.
-  async onModuleInit() {
-    await this.createTransporter();
+  // Builds the transporter once at boot, without blocking on it.
+  //
+  // The transporter is created synchronously enough to serve the first send;
+  // what used to hold boot up was the SMTP handshake in verify(). On a host
+  // that spins down when idle, that handshake is paid on every single wake —
+  // measured at 42s of cold start, of which the app's own boot was ~21s. No
+  // request needs mail at boot, so the check now runs in the background and
+  // still logs exactly what it did.
+  onModuleInit(): void {
+    void this.createTransporter();
   }
 
   // Creates the SMTP transporter from configuration.

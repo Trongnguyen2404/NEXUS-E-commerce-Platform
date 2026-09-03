@@ -1,25 +1,38 @@
-name: Keep the API warm
+name: Wake the API for the day
 
-# The API runs on an instance that spins down after 15 minutes without inbound
-# traffic and then takes about a minute to answer again. This pokes it during
-# the hours shoppers are actually around.
+# Waking the free instance and keeping it awake are two different jobs, and one
+# tool cannot do both.
+#
+#   * Waking needs a client that will hold the connection for the whole ~42s
+#     cold start. Free uptime pingers cap their request timeout well below that
+#     — cron-job.org stops at 30s — so they never see the boot finish, and the
+#     service goes back to sleep having served nobody.
+#   * Keeping it awake needs punctuality, not patience: a request at least every
+#     15 minutes, which is exactly what those pingers are good at.
+#
+# So this workflow does the first job only. It fires once in the early morning,
+# waits as long as the instance needs, and then gets out of the way; the pinger
+# takes over for the rest of the day.
 #
 # It calls /health/live on purpose — that route does not query the database.
 # /health and /health/ready both do, and holding a free Postgres compute open
 # all day would exhaust its monthly allowance long before the month ended.
 #
 # Two honest caveats:
-#   * GitHub's scheduled runs are best-effort and can slip well past their slot
-#     under load, so an occasional 15-minute gap will let the service sleep. A
-#     dedicated uptime pinger is more punctual if that starts to matter.
+#   * GitHub throttles frequent schedules hard. The earlier version of this file
+#     asked for every 10 minutes and was granted roughly every 3 to 10 hours.
+#     Once-a-day runs are treated far better, but "best effort" still means a
+#     slot can slip, which is why the two schedules below aim an hour early.
 #   * GitHub disables scheduled workflows after 60 days with no repo activity.
+#     On a repo that stops being touched, this quietly stops running.
 
 on:
   schedule:
-    # Every 10 minutes from 00:00 to 16:50 UTC — 07:00 to 23:50 in UTC+7.
-    # About 510 running hours a month, comfortably inside the 750 the free
-    # tier grants a workspace per calendar month.
-    - cron: '*/10 0-16 * * *'
+    # 22:00 and 23:00 UTC — 05:00 and 06:00 in UTC+7. Both aim well ahead of the
+    # 07:00 window so a slipped slot still lands before anyone visits. Whichever
+    # one runs first pays the cold start; the other then costs a 0.3s round trip.
+    - cron: '0 22 * * *'
+    - cron: '0 23 * * *'
   workflow_dispatch:
 
 concurrency:
@@ -30,10 +43,10 @@ permissions:
   contents: read
 
 jobs:
-  ping:
-    name: Ping the liveness route
+  wake:
+    name: Wake the instance
     runs-on: ubuntu-latest
-    timeout-minutes: 6
+    timeout-minutes: 20
 
     steps:
       - name: Wake the API
@@ -45,20 +58,26 @@ jobs:
           set -uo pipefail
           url="$API_BASE/api/v1/health/live"
 
-          for attempt in 1 2 3; do
-            # A cold instance holds the connection while it boots, so allow
-            # well over the usual one-minute spin-up before giving up.
+          for attempt in $(seq 1 6); do
+            started=$(date +%s)
+
+            # A cold instance answers 503 from the edge while it boots, and only
+            # a client still connected at the end gets the 200. Two minutes is
+            # roughly triple the measured cold start, so a slow boot still wins.
             code=$(curl -sS -o /tmp/body.txt -w '%{http_code}' \
                      --max-time 120 "$url" || echo 000)
-            echo "attempt $attempt -> HTTP $code"
+
+            echo "attempt $attempt -> HTTP $code after $(( $(date +%s) - started ))s"
 
             if [ "$code" = "200" ]; then
               echo "awake: $(cat /tmp/body.txt)"
               exit 0
             fi
 
-            [ "$attempt" -lt 3 ] && sleep 20
+            # Give the instance room to finish a boot this attempt kicked off
+            # before knocking again.
+            [ "$attempt" -lt 6 ] && sleep 45
           done
 
-          echo "::error::$url never returned 200 after three attempts"
+          echo "::error::$url never returned 200 after six attempts"
           exit 1
